@@ -34,10 +34,21 @@ NetworkEventType = Literal[
 BBox = tuple[float, float, float, float]
 
 
+def _normalise_box(instance: object, name: str) -> None:
+    """Store boxes as float tuples so serialization is canonical (0 vs 0.0)."""
+    value = getattr(instance, name)
+    if value is not None:
+        object.__setattr__(instance, name, tuple(float(v) for v in value))
+
+
 @dataclass(frozen=True)
 class Position:
     x: float
     y: float
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "x", float(self.x))
+        object.__setattr__(self, "y", float(self.y))
 
 
 @dataclass(frozen=True)
@@ -51,6 +62,9 @@ class State:
     shape: Shape = "unknown"
     label_confidence: float | None = None
     provenance: Provenance = "unknown"
+
+    def __post_init__(self) -> None:
+        _normalise_box(self, "bbox")
 
 
 @dataclass(frozen=True)
@@ -77,6 +91,9 @@ class Transition:
     kind: TransitionKind = "state_change"
     network: NetworkEvent | None = None
     provenance: Provenance = "unknown"
+
+    def __post_init__(self) -> None:
+        _normalise_box(self, "label_bbox")
 
 
 @dataclass(frozen=True)

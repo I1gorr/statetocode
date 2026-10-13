@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>State Diagram Studio</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="toolbar" role="toolbar" aria-label="Diagram actions">
+  <div class="group">
+    <label class="button primary" for="upload">Upload image</label>
+    <input id="upload" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden>
+    <button id="save" title="Validate and save the canonical JSON">Save JSON</button>
+    <button id="save-correction" title="Store the reviewed graph as training/evaluation data">Save correction…</button>
+  </div>
+  <div class="group">
+    <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
+  </div>
+  <div class="group">
+    <button id="add-state" title="Add a state (or double-click the canvas)">Add state</button>
+    <button id="connect" aria-pressed="false" title="Click a source state, then a target state">Connect</button>
+    <button id="layout">Auto layout</button>
+    <button id="zoom-in" title="Zoom in">+</button>
+    <button id="zoom-out" title="Zoom out">−</button>
+    <button id="fit">Fit</button>
+  </div>
+  <div class="group">
+    <label class="check"><input id="toggle-image" type="checkbox" checked> Image</label>
+    <label class="check"><input id="toggle-overlay" type="checkbox" checked> Detections</label>
+  </div>
+  <div class="group">
+    <select id="export" aria-label="Export">
+      <option value="">Export…</option>
+      <option value="json">Canonical JSON</option>
+      <option value="svg">Graph (SVG)</option>
+      <option value="py">Generated code (.py)</option>
+      <option value="tests">Generated tests (.py)</option>
+    </select>
+  </div>
+  <span id="status" role="status" aria-live="polite"></span>
+</header>
+
+<main class="workspace" id="workspace">
+  <section class="pane image-pane" id="image-pane" aria-label="Uploaded diagram">
+    <div class="pane-title">Source image <span id="image-meta" class="hint"></span></div>
+    <div class="image-wrap" id="image-wrap">
+      <p class="empty" id="image-empty">Upload a diagram image to detect states and transitions.</p>
+      <img id="image" alt="Uploaded state diagram" hidden>
+      <svg id="overlay" aria-hidden="true"></svg>
+    </div>
+  </section>
+
+  <section class="pane graph-pane" aria-label="Reconstructed graph">
+    <div class="pane-title">Reconstructed graph <span id="graph-meta" class="hint"></span></div>
+    <svg id="graph" tabindex="0" role="application" aria-label="Editable state machine graph. Double-click to add a state, Delete removes the selection.">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="arrowhead"></path>
+        </marker>
+        <marker id="arrow-net" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="arrowhead net"></path>
+        </marker>
+        <marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="arrowhead warn"></path>
+        </marker>
+      </defs>
+      <g id="viewport"></g>
+    </svg>
+    <div class="legend" aria-hidden="true">
+      <span><i class="sw ok"></i>state change</span>
+      <span><i class="sw net"></i>network event</span>
+      <span><i class="sw warn"></i>needs review</span>
+      <span><i class="sw err"></i>invalid</span>
+    </div>
+  </section>
+
+  <aside class="pane side" aria-label="Details">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="inspector" aria-selected="true">Inspector</button>
+      <button role="tab" data-tab="issues" aria-selected="false">Issues <span id="issue-count" class="badge"></span></button>
+      <button role="tab" data-tab="json" aria-selected="false">JSON</button>
+      <button role="tab" data-tab="code" aria-selected="false">Code <span id="code-stale" class="badge warn" hidden>stale</span></button>
+      <button role="tab" data-tab="gemini" aria-selected="false">Explain</button>
+    </nav>
+
+    <div class="tab" id="tab-inspector" role="tabpanel">
+      <div id="inspector"></div>
+      <details class="network" open>
+        <summary>Network topology</summary>
+        <p class="hint">Devices and links describe physical/logical connections. They are separate from state transitions.</p>
+        <div id="network-editor"></div>
+      </details>
+    </div>
+
+    <div class="tab" id="tab-issues" role="tabpanel" hidden>
+      <div id="issues"></div>
+    </div>
+
+    <div class="tab" id="tab-json" role="tabpanel" hidden>
+      <textarea id="json" spellcheck="false" aria-label="Canonical JSON"></textarea>
+      <div class="row-buttons">
+        <button id="apply-json" class="primary">Apply JSON</button>
+        <button id="reset-json">Discard edits</button>
+        <label class="button">Import file<input id="import-json" type="file" accept="application/json,.json" hidden></label>
+      </div>
+      <p class="hint">JSON is validated against the schema and graph rules before it replaces the graph.</p>
+      <div id="json-errors"></div>
+    </div>
+
+    <div class="tab" id="tab-code" role="tabpanel" hidden>
+      <div class="row-buttons">
+        <select id="backend" aria-label="Code generator">
+          <option value="template">Deterministic template</option>
+          <option value="gemini">Gemini (verified)</option>
+        </select>
+        <button id="generate" class="primary">Generate &amp; verify</button>
+        <button id="explain-code">Explain code</button>
+      </div>
+      <div id="code-report"></div>
+      <pre id="code" class="code" tabindex="0"></pre>
+      <div id="code-explanation"></div>
+    </div>
+
+    <div class="tab" id="tab-gemini" role="tabpanel" hidden>
+      <p class="hint">Gemini explains the validated JSON and can suggest corrections from the image. Suggestions are never applied without your approval.</p>
+      <label for="question">Question (optional)</label>
+      <input id="question" placeholder="e.g. What happens after a timeout?">
+      <div class="row-buttons">
+        <button id="explain" class="primary">Explain diagram</button>
+        <button id="suggest">Suggest corrections</button>
+      </div>
+      <div id="gemini-output"></div>
+    </div>
+  </aside>
+</main>
+
+<dialog id="correction-dialog">
+  <form method="dialog">
+    <h2>Save correction</h2>
+    <p class="hint">Stores the image, the original prediction and your corrected graph.</p>
+    <label><input type="radio" name="split" value="train" checked> Training data (used to fine-tune the detector)</label>
+    <label><input type="radio" name="split" value="eval"> Held-out evaluation (never used for training)</label>
+    <label for="reviewer">Reviewer (optional)</label>
+    <input id="reviewer" autocomplete="off">
+    <div class="row-buttons">
+      <button value="cancel">Cancel</button>
+      <button value="save" class="primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

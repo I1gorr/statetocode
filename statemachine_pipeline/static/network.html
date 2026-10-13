@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Network Diagram Editor</title>
+<style>
+body{font:15px system-ui;margin:0;color:#17202a}header{padding:10px;border-bottom:1px solid #ccd6df}
+main{display:grid;grid-template-columns:1fr 330px;height:calc(100vh - 52px)}svg{width:100%;height:100%;background:#eef3f7}
+aside{padding:14px;border-left:1px solid #ccd6df;overflow:auto}button,input,textarea{font:inherit;padding:7px;margin:3px 0}
+button{cursor:pointer}input,textarea{width:100%;box-sizing:border-box}.node{fill:#fff;stroke:#1769aa;stroke-width:2;cursor:grab}
+.edge{stroke:#53616d;stroke-width:2}.selected{stroke:#d97706;stroke-width:4}.hint{color:#53616d;font-size:13px}
+</style><header><button id="add">Add component</button><button id="edge">Add connection</button>
+<button id="save">Save JSON</button><span id="status" class="hint"></span></header><main><svg id="graph" tabindex="0"></svg>
+<aside><h2>Network diagram</h2><p class="hint">Drag circles, click a component to rename it, or use Add connection then click two components.</p>
+<label>Selected component <input id="label" placeholder="component label"></label><button id="apply">Apply label</button>
+<h3>Canonical JSON</h3><textarea id="json" rows="18" spellcheck="false"></textarea>
+<button id="apply-json">Apply JSON</button></aside></main>
+<script>
+let model,selected=null,connecting=false,first=null,drag=null;
+const $=id=>document.getElementById(id),svg=$('graph');
+function announce(x){$('status').textContent=x}
+function pos(n){return n.position||{x:80,y:80}}
+function sync(){ $('json').value=JSON.stringify(model,null,2); render() }
+function render(){svg.innerHTML='';let by=Object.fromEntries(model.nodes.map(n=>[n.id,n]));
+ model.edges.forEach(e=>{let a=by[e.source],b=by[e.target];if(!a||!b)return;let l=document.createElementNS('http://www.w3.org/2000/svg','line');
+ let pa=pos(a),pb=pos(b);l.setAttribute('x1',pa.x);l.setAttribute('y1',pa.y);l.setAttribute('x2',pb.x);l.setAttribute('y2',pb.y);l.className='edge';svg.append(l)});
+ model.nodes.forEach(n=>{let p=pos(n),g=document.createElementNS('http://www.w3.org/2000/svg','g'),c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+ c.setAttribute('cx',p.x);c.setAttribute('cy',p.y);c.setAttribute('r',n.radius||30);c.className='node';c.classList.toggle('selected',n.id===selected);
+ c.onpointerdown=e=>{c.setPointerCapture(e.pointerId);drag=n.id};c.onpointermove=e=>{if(drag!==n.id)return;let r=svg.getBoundingClientRect();n.position={x:e.clientX-r.left,y:e.clientY-r.top};sync()};
+ c.onpointerup=()=>{drag=null};c.onclick=()=>{if(connecting){if(!first){first=n.id;announce('Choose the second component')}else if(first!==n.id){let i=0,ids=new Set(model.edges.map(e=>e.id));while(ids.has('E'+i))i++;model.edges.push({id:'E'+i,source:first,target:n.id,directed:false,label:null,confidence:null});connecting=false;first=null;announce('Connection added');sync()}return}selected=n.id;$('label').value=n.label||'';render()};g.append(c);
+ let t=document.createElementNS('http://www.w3.org/2000/svg','text');t.setAttribute('x',p.x-22);t.setAttribute('y',p.y+5);t.textContent=n.label||n.id;g.append(t);svg.append(g)})}
+ $('add').onclick=()=>{let i=0,ids=new Set(model.nodes.map(n=>n.id));while(ids.has('N'+i))i++;model.nodes.push({id:'N'+i,label:null,position:{x:100+i*100,y:100},radius:30,confidence:null});sync()};
+ $('edge').onclick=()=>{connecting=true;first=null;announce('Choose the first component')};
+ $('apply').onclick=()=>{if(!selected)return;model.nodes.find(n=>n.id===selected).label=$('label').value||null;sync()};
+ $('apply-json').onclick=()=>{try{let next=JSON.parse($('json').value);if(!Array.isArray(next.nodes)||!Array.isArray(next.edges))throw Error('nodes and edges are required');model=next;sync();announce('JSON applied')}catch(e){announce('Invalid JSON: '+e.message)}};
+ $('save').onclick=async()=>{try{let r=await fetch('/api/machine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(model)}),x=await r.json();if(!r.ok)throw Error((x.errors||['Invalid graph']).join('; '));model=x;sync();announce('Saved')}catch(e){announce(e.message)}};
+ fetch('/api/machine').then(r=>r.json()).then(x=>{model=x;sync();announce('Loaded')});
+</script>
