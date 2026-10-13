@@ -290,22 +290,32 @@ class StateMachine:
 
 
 if __name__ == "__main__":
-    # Demo run: all guards true, fire each transition at most once.
-    machine = StateMachine(guards={{name: (lambda ctx: True) for name in GUARDS}})
+    # Demo run: fire each transition at most once; only the guard of the chosen
+    # transition is true, so guarded alternatives (e.g. retry vs give up) stay deterministic.
+    chosen_guards: set[str] = set()
+    machine = StateMachine(guards={{name: (lambda ctx, name=name: name in chosen_guards) for name in GUARDS}})
     print(f"start: {{machine.current_state}} ({{STATES[machine.current_state]}})")
     fired: set[str] = set()
     while True:
-        options = [t for t in TRANSITIONS if t.source == machine.current_state and t.id not in fired]
+        visited = {{h["from"] for h in machine.history}} | {{machine.current_state}}
+        options = sorted(
+            (t for t in TRANSITIONS if t.source == machine.current_state and t.id not in fired),
+            key=lambda t: (t.target in visited, t.target == t.source),  # explore new states first
+        )
         if machine.is_terminal or not options:
             break
         before, event = machine.current_state, options[0].trigger
+        chosen_guards.clear()
+        if options[0].guard:
+            chosen_guards.add(options[0].guard)
         try:
             machine.submit(event)
         except StateMachineError as exc:
             print(f"{{event}}: {{type(exc).__name__}}: {{exc}}")
             break
         fired.add(machine.history[-1]["transition"])
-        print(f"{{before}} --{{event}}--> {{machine.current_state}} ({{STATES[machine.current_state]}})")
+        guard = f" [{{options[0].guard}}]" if options[0].guard else ""
+        print(f"{{before}} --{{event}}{{guard}}--> {{machine.current_state}} ({{STATES[machine.current_state]}})")
 '''
 
 
