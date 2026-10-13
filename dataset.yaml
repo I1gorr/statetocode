@@ -1,0 +1,19 @@
+path: C:/statetocode/dataset
+
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: state
+  1: arrow
+
+# Petri-net models require a separately trained model with:
+# 0: place
+# 1: transition
+# 2: arc
+
+# Network diagrams use the OpenCV circle/stroke baseline by default. If a
+# supervised model is trained later, keep its classes separate:
+# 0: component_circle
+# 1: connector

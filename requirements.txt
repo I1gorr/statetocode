@@ -1,0 +1,6 @@
+numpy
+opencv-python
+ultralytics
+google-genai
+python-dotenv
+pytest

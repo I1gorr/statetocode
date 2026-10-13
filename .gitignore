@@ -1,0 +1,13 @@
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+outputs/
+.venv/
+venv/
+dataset/
+dataset_v2/
+runs/
+.env
+*.pt
+data/
