@@ -71,7 +71,7 @@ def test_static_check_and_sandbox_block_unsafe_code():
     blocked = run_conformance(
         "import builtins\nGUARDS=()\nclass StateMachine:\n  current_state='S0'\n"
         "  def submit(self, e, c=None):\n    getattr(builtins, 'open')('escape.txt', 'w')\n",
-        [[{"event": "x", "guards": {}}]],
+        [{"start": "S0", "steps": [{"event": "x", "guards": {}}]}],
     )
     assert blocked.results == [[{"state": None, "error": "RuntimeError"}]]
     looping = run_events("class StateMachine:\n  def __init__(self, **k):\n    while True: pass\n", ["x"], timeout=2)
@@ -98,12 +98,14 @@ def test_event_trace_matches_reference():
     assert actual.valid and actual.actual == expected
 
 
-def test_plan_reports_unreachable_transitions():
+def test_transitions_from_unreachable_states_are_still_exercised():
     m = StateMachine("1.1", "x", (State("S0", "A", "initial"), State("S1", "B"), State("S2", "C")),
                      (Transition("T0", "S0", "S1", "go"), Transition("T1", "S2", "S1", "never")))
     plan = build_test_plan(m)
-    assert "T0" in plan.covered_transitions
-    assert any(u.startswith("T1") for u in plan.uncovered)
+    assert plan.covered_transitions == {"T0", "T1"}
+    assert plan.started_outside_initial == ["T1"]
+    report = verify_generated(generate_python(m), m)
+    assert report.valid and set(report.covered_transitions) == {"T0", "T1"}
 
 
 def test_machine_without_initial_state_uses_first_state_and_documents_it():

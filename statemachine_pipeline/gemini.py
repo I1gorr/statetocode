@@ -18,7 +18,20 @@ from .models import StateMachine
 from .validation import validate_state_machine
 
 SYSTEM_PROMPT_VERSION = "state-machine-codegen-2"
-SUGGESTION_FIELDS = {"label", "event", "guard", "action", "source", "target", "direction", "type"}
+SUGGESTION_FIELDS = {"label", "event", "guard", "action", "source", "target", "direction", "type", "add_transition"}
+ALLOWED_VALUES = {
+    "direction": {"forward", "loop", "unknown", "reverse"},
+    "type": {"initial", "normal", "final"},
+}
+
+
+def _as_list(value: Any) -> list[str]:
+    """LLMs sometimes return a string where a list was requested."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(v) for v in value]
 
 
 def _load_dotenv() -> None:
@@ -140,8 +153,8 @@ class GeminiGenerator:
                 source_code=_strip_fence(str(value["source_code"])),
                 target_language=str(value["target_language"]),
                 state_mapping=dict(value.get("state_mapping", {})),
-                assumptions=[str(a) for a in value.get("assumptions", [])],
-                warnings=[str(w) for w in value.get("warnings", [])],
+                assumptions=_as_list(value.get("assumptions")),
+                warnings=_as_list(value.get("warnings")),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"Gemini response did not match the code-generation contract: {exc}") from exc
@@ -223,9 +236,9 @@ class GeminiGenerator:
                     {"transition_id": str(n["transition_id"]), "description": str(n["description"])}
                     for n in value.get("network_events", []) if str(n.get("transition_id")) in known_transitions
                 ],
-                "execution_flows": [str(f) for f in value.get("execution_flows", [])],
-                "ambiguities": [str(a) for a in value.get("ambiguities", [])],
-                "warnings": [str(w) for w in value.get("warnings", [])],
+                "execution_flows": _as_list(value.get("execution_flows")),
+                "ambiguities": _as_list(value.get("ambiguities")),
+                "warnings": _as_list(value.get("warnings")),
                 "answer": str(value.get("answer", "")),
             }
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
@@ -245,9 +258,13 @@ class GeminiGenerator:
             "instructions": (
                 "Compare the JSON with the diagram image. Propose corrections only where the image clearly "
                 "shows something different (misread label, reversed arrow, wrong endpoint, missing initial "
-                "or final marker). Each suggestion: element_id (existing state or transition id), field (one "
-                f"of {sorted(SUGGESTION_FIELDS)}), suggested_value (string or null), evidence (what in the "
-                "image supports it), confidence (0..1). If the image is unclear, do not suggest."
+                "or final marker, missing arrow). Each suggestion: element_id (existing state or transition "
+                f"id), field (one of {sorted(SUGGESTION_FIELDS)}), suggested_value (string or null), evidence "
+                "(what in the image supports it), confidence (0..1). Allowed values: direction is 'reverse' "
+                "(swap source and target), 'forward', 'loop' or 'unknown'; type is initial/normal/final; "
+                "source and target are state ids. For an arrow missing from the JSON use field "
+                "'add_transition' with element_id = source state id and suggested_value = target state id. "
+                "If the image is unclear, do not suggest."
             ),
             "required_fields": {"suggestions": "[...]", "notes": "[string]"},
         }, sort_keys=True, default=list)
@@ -273,16 +290,26 @@ class GeminiGenerator:
             except (KeyError, TypeError, ValueError):
                 rejected.append({"suggestion": raw, "reason": "malformed"})
                 continue
+            field_name, value_ = suggestion["field"], suggestion["suggested_value"]
             element_ok = suggestion["element_id"] in states | transitions
-            field_ok = suggestion["field"] in SUGGESTION_FIELDS
-            if suggestion["field"] in {"source", "target"} and suggestion["suggested_value"] not in states:
+            field_ok = field_name in SUGGESTION_FIELDS
+            # The suggestion must be applicable as-is: right element kind, legal value.
+            if field_name in {"source", "target", "add_transition"} and value_ not in states:
+                field_ok = False
+            if field_name in {"add_transition", "type"} and suggestion["element_id"] not in states:
+                field_ok = False
+            if field_name in {"source", "target", "direction", "event", "guard", "action"} and \
+                    suggestion["element_id"] not in transitions:
+                field_ok = False
+            if field_name in ALLOWED_VALUES and value_ not in ALLOWED_VALUES[field_name]:
                 field_ok = False
             if not (element_ok and field_ok):
-                rejected.append({"suggestion": suggestion, "reason": "unknown element, field or state reference"})
+                rejected.append({"suggestion": suggestion,
+                                 "reason": "unknown element, field, value or state reference"})
                 continue
             accepted.append(suggestion)
         return {"suggestions": accepted, "rejected": rejected,
-                "notes": [str(n) for n in value.get("notes", []) or []]}
+                "notes": _as_list(value.get("notes"))}
 
     def explain_code(self, machine: StateMachine, source_code: str) -> dict[str, Any]:
         """Explain generated code and propose test cases; tests are checked against the oracle."""

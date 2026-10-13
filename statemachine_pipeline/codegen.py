@@ -322,13 +322,20 @@ class Step:
 
 
 @dataclass
+class PlannedTrace:
+    start: str
+    steps: list[Step]
+
+
+@dataclass
 class TestPlan:
-    traces: list[list[Step]] = field(default_factory=list)
+    traces: list[PlannedTrace] = field(default_factory=list)
     covered_transitions: set[str] = field(default_factory=set)
     uncovered: list[str] = field(default_factory=list)
+    started_outside_initial: list[str] = field(default_factory=list)
 
-    def to_json(self) -> list[list[dict[str, Any]]]:
-        return [[step.__dict__ for step in trace] for trace in self.traces]
+    def to_json(self) -> list[dict[str, Any]]:
+        return [{"start": trace.start, "steps": [step.__dict__ for step in trace.steps]} for trace in self.traces]
 
 
 def _guard_setting(machine: StateMachine, chosen: Transition) -> dict[str, bool]:
@@ -348,13 +355,19 @@ def _guard_setting(machine: StateMachine, chosen: Transition) -> dict[str, bool]
 
 
 def build_test_plan(machine: StateMachine) -> TestPlan:
-    """Traces that cover every reachable transition plus error behaviour."""
+    """Traces that exercise every transition plus error behaviour.
+
+    Transitions reachable from the initial state are reached by firing a path
+    from it; transitions leaving unreachable states start the machine directly
+    in their source state (``StateMachine(initial_state=...)``), so the
+    generated code is still checked for them.
+    """
     validate_state_machine(machine).raise_for_errors()
     plan = TestPlan()
     initial = initial_state_of(machine)
 
-    def run(steps_spec: list[tuple[str, dict[str, bool]]]) -> list[Step]:
-        state = initial
+    def run(start: str, steps_spec: list[tuple[str, dict[str, bool]]]) -> PlannedTrace:
+        state = start
         steps = []
         for event, guards in steps_spec:
             try:
@@ -363,9 +376,9 @@ def build_test_plan(machine: StateMachine) -> TestPlan:
             except ReferenceError_ as exc:
                 steps.append(Step(event, guards, None, exc.kind))
                 break
-        return steps
+        return PlannedTrace(start, steps)
 
-    # Shortest firing path to every state (BFS over transitions that fire deterministically).
+    # Shortest firing path to every reachable state.
     paths: dict[str, list[tuple[str, dict[str, bool]]]] = {initial: []}
     queue = deque([initial])
     while queue:
@@ -385,31 +398,35 @@ def build_test_plan(machine: StateMachine) -> TestPlan:
                 paths[target] = paths[current] + [(trigger_of(transition), setting)]
                 queue.append(target)
 
+    def route(state_id: str) -> tuple[str, list[tuple[str, dict[str, bool]]]]:
+        if state_id in paths:
+            return initial, paths[state_id]
+        return state_id, []
+
     for transition in machine.transitions:
-        if transition.source not in paths:
-            plan.uncovered.append(f"{transition.id} (source {transition.source} unreachable)")
-            continue
-        spec = paths[transition.source] + [(trigger_of(transition), _guard_setting(machine, transition))]
-        trace = run(spec)
+        start, prefix = route(transition.source)
+        if start != initial:
+            plan.started_outside_initial.append(transition.id)
+        trace = run(start, prefix + [(trigger_of(transition), _guard_setting(machine, transition))])
         plan.traces.append(trace)
-        if trace and trace[-1].expected_error is None:
+        if trace.steps and trace.steps[-1].expected_error is None:
             plan.covered_transitions.add(transition.id)
-        elif trace:
-            plan.uncovered.append(f"{transition.id} ({trace[-1].expected_error})")
+        elif trace.steps:
+            plan.uncovered.append(f"{transition.id} ({trace.steps[-1].expected_error})")
         if transition.guard is not None:
             rejected = dict(_guard_setting(machine, transition))
             rejected[transition.guard] = False
-            plan.traces.append(run(paths[transition.source] + [(trigger_of(transition), rejected)]))
+            plan.traces.append(run(start, prefix + [(trigger_of(transition), rejected)]))
 
     all_triggers = sorted({trigger_of(t) for t in machine.transitions})
     probe = "__invalid_event__"
     while probe in all_triggers:
         probe += "_"
-    for state_id, path in sorted(paths.items()):
-        plan.traces.append(run(path + [(probe, {})]))
-        state = machine.state(state_id)
-        if state is not None and state.type == "final" and all_triggers:
-            plan.traces.append(run(path + [(all_triggers[0], {})]))
+    for state in machine.states:
+        start, prefix = route(state.id)
+        plan.traces.append(run(start, prefix + [(probe, {})]))
+        if state.type == "final" and all_triggers:
+            plan.traces.append(run(start, prefix + [(all_triggers[0], {})]))
     return plan
 
 
@@ -454,6 +471,7 @@ class ConformanceReport:
     covered_transitions: list[str]
     uncovered_transitions: list[str]
     mismatches: list[dict[str, Any]]
+    started_outside_initial: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -474,7 +492,8 @@ def verify_generated(source: str, machine: StateMachine, *, timeout: float = 10.
                                  plan.uncovered, [])
     mismatches = []
     checked = 0
-    for trace_index, (trace, actual) in enumerate(zip(plan.traces, outcome.results)):
+    for trace_index, (planned, actual) in enumerate(zip(plan.traces, outcome.results)):
+        trace = planned.steps
         for step_index, (step, observed) in enumerate(zip(trace, actual)):
             checked += 1
             expected = {"state": step.expected_state, "error": step.expected_error}
@@ -484,7 +503,8 @@ def verify_generated(source: str, machine: StateMachine, *, timeout: float = 10.
         if len(actual) != len(trace):
             mismatches.append({"trace": trace_index, "expected_steps": len(trace), "actual_steps": len(actual)})
     return ConformanceReport(not mismatches, [], checked, len(plan.traces),
-                             sorted(plan.covered_transitions), plan.uncovered, mismatches[:20])
+                             sorted(plan.covered_transitions), plan.uncovered, mismatches[:20],
+                             plan.started_outside_initial)
 
 
 def generate_tests(machine: StateMachine, module: str = "state_machine") -> str:
@@ -506,16 +526,16 @@ import {module} as generated
 TRACES = json.loads(r"""{payload}""")
 
 
-def _machine(guard_values):
+def _machine(guard_values, start):
     guards = {{name: (lambda ctx, name=name: guard_values.get(name, False)) for name in generated.GUARDS}}
-    return generated.StateMachine(guards=guards)
+    return generated.StateMachine(guards=guards, initial_state=start)
 
 
 @pytest.mark.parametrize("trace", TRACES, ids=[f"trace{{i}}" for i in range(len(TRACES))])
 def test_trace(trace):
     guard_values = {{}}
-    machine = _machine(guard_values)
-    for step in trace:
+    machine = _machine(guard_values, trace["start"])
+    for step in trace["steps"]:
         guard_values.clear()
         guard_values.update(step["guards"])
         if step["expected_error"]:

@@ -203,7 +203,6 @@ const Ops = (() => {
       const loops = items.filter((t) => t.source === t.target);
       loops.forEach((t, i) => {
         const p = pos[t.source];
-        const r = radiusOf(t.source);
         // Point loops away from the state's neighbours so they do not cover other edges.
         let sx = 0, sy = 0;
         for (const o of m.transitions) {
@@ -215,8 +214,10 @@ const Ops = (() => {
         const base = Math.hypot(sx, sy) > 0.01 ? Math.atan2(-sy, -sx) : -Math.PI / 2;
         const angle = base + i * (Math.PI / 3);
         const a1 = angle - 0.45, a2 = angle + 0.45;
-        const s = { x: p.x + r * Math.cos(a1), y: p.y + r * Math.sin(a1) };
-        const e = { x: p.x + r * Math.cos(a2), y: p.y + r * Math.sin(a2) };
+        const r = radiusOf(t.source, angle);
+        const r1 = radiusOf(t.source, a1), r2 = radiusOf(t.source, a2);
+        const s = { x: p.x + r1 * Math.cos(a1), y: p.y + r1 * Math.sin(a1) };
+        const e = { x: p.x + r2 * Math.cos(a2), y: p.y + r2 * Math.sin(a2) };
         const reach = r * 2.3 + 18;
         const c1 = { x: p.x + reach * Math.cos(a1 - 0.25), y: p.y + reach * Math.sin(a1 - 0.25) };
         const c2 = { x: p.x + reach * Math.cos(a2 + 0.25), y: p.y + reach * Math.sin(a2 + 0.25) };
@@ -237,8 +238,8 @@ const Ops = (() => {
         if (!canonical) { nx = -nx; ny = -ny; }
         const mid = { x: (a.x + b.x) / 2 + nx * offset, y: (a.y + b.y) / 2 + ny * offset };
         const ctrl = { x: (a.x + b.x) / 2 + nx * offset * 2, y: (a.y + b.y) / 2 + ny * offset * 2 };
-        const ra = radiusOf(t.source), rb = radiusOf(t.target);
         const sa = Math.atan2(ctrl.y - a.y, ctrl.x - a.x), sb = Math.atan2(ctrl.y - b.y, ctrl.x - b.x);
+        const ra = radiusOf(t.source, sa), rb = radiusOf(t.target, sb);
         const s = { x: a.x + ra * Math.cos(sa), y: a.y + ra * Math.sin(sa) };
         const e = { x: b.x + (rb + 2) * Math.cos(sb), y: b.y + (rb + 2) * Math.sin(sb) };
         const d = offset === 0 ? `M${s.x},${s.y} L${e.x},${e.y}` : `M${s.x},${s.y} Q${ctrl.x},${ctrl.y} ${e.x},${e.y}`;
@@ -348,11 +349,19 @@ if (typeof document !== 'undefined') (() => {
   }
 
   // ---------------------------------------------------------------- geometry helpers
-  function radiusOf(id) {
+  /* Distance from a state's centre to its outline along `angle` (rects included). */
+  function halfSize(s) {
+    const r = s.bbox ? Math.max(22, Math.min(70, Math.max(s.bbox[2] - s.bbox[0], s.bbox[3] - s.bbox[1]) / 2)) : 32;
+    if (s.shape !== 'rounded_rect') return { w: r, h: r, rect: false };
+    return s.bbox ? { w: (s.bbox[2] - s.bbox[0]) / 2, h: (s.bbox[3] - s.bbox[1]) / 2, rect: true } : { w: r * 1.3, h: r * 0.8, rect: true };
+  }
+  function radiusOf(id, angle) {
     const s = model.states.find((x) => x.id === id);
     if (!s) return 30;
-    if (s.bbox) return Math.max(22, Math.min(70, Math.max(s.bbox[2] - s.bbox[0], s.bbox[3] - s.bbox[1]) / 2));
-    return 32;
+    const { w, h, rect } = halfSize(s);
+    if (!rect || angle === undefined) return Math.max(w, h);
+    const c = Math.abs(Math.cos(angle)), si = Math.abs(Math.sin(angle));
+    return Math.min(c > 1e-6 ? w / c : Infinity, si > 1e-6 ? h / si : Infinity);
   }
   function svgPoint(evt) {
     const svg = $('graph');
@@ -436,11 +445,12 @@ if (typeof document !== 'undefined') (() => {
       const g = el('g', { class: cls.join(' '), 'data-id': s.id, tabindex: '0', role: 'button',
         'aria-label': `State ${s.label || s.id}${s.type !== 'normal' ? ', ' + s.type : ''}` });
       if (s.type === 'initial') {
-        g.append(el('circle', { class: 'initial-dot', cx: p.x - r - 34, cy: p.y, r: 5 }));
-        g.append(el('line', { class: 'initial-line', x1: p.x - r - 30, y1: p.y, x2: p.x - r - 3, y2: p.y, 'marker-end': 'url(#arrow)' }));
+        const left = radiusOf(s.id, Math.PI);
+        g.append(el('circle', { class: 'initial-dot', cx: p.x - left - 34, cy: p.y, r: 5 }));
+        g.append(el('line', { class: 'initial-line', x1: p.x - left - 30, y1: p.y, x2: p.x - left - 3, y2: p.y, 'marker-end': 'url(#arrow)' }));
       }
       if (s.shape === 'rounded_rect') {
-        const w = s.bbox ? (s.bbox[2] - s.bbox[0]) / 2 : r * 1.3, h = s.bbox ? (s.bbox[3] - s.bbox[1]) / 2 : r * 0.8;
+        const { w, h } = halfSize(s);
         g.append(el('rect', { class: 'state-shape', x: p.x - w, y: p.y - h, width: 2 * w, height: 2 * h, rx: 10 }));
       } else {
         g.append(el('circle', { class: 'state-shape', cx: p.x, cy: p.y, r }));
@@ -792,7 +802,8 @@ if (typeof document !== 'undefined') (() => {
     const svg = $('graph');
     if (!model.states.length) { view = { x: 0, y: 0, k: 1 }; applyView(); return; }
     const xs = model.states.map((s) => (s.position || { x: 80 }).x), ys = model.states.map((s) => (s.position || { y: 80 }).y);
-    const minX = Math.min(...xs) - 110, maxX = Math.max(...xs) + 110, minY = Math.min(...ys) - 110, maxY = Math.max(...ys) + 110;
+    const margin = 110 + (model.transitions.some((t) => t.source === t.target) ? 110 : 0);
+    const minX = Math.min(...xs) - margin, maxX = Math.max(...xs) + margin, minY = Math.min(...ys) - margin, maxY = Math.max(...ys) + margin;
     const w = svg.clientWidth || 800, h = svg.clientHeight || 600;
     const k = Math.max(0.2, Math.min(2.5, Math.min(w / (maxX - minX), h / (maxY - minY))));
     view = { k, x: (w - (maxX + minX) * k) / 2, y: (h - (maxY + minY) * k) / 2 };
@@ -958,6 +969,12 @@ if (typeof document !== 'undefined') (() => {
     const isState = model.states.some((x) => x.id === s.element_id);
     const value = s.suggested_value;
     let next;
+    if (s.field === 'add_transition') {
+      const [added, id] = Ops.addTransition(model, s.element_id, value, { provenance: 'llm' });
+      commit(added, `Added suggested transition ${id}`);
+      select('transition', id);
+      return;
+    }
     if (isState) {
       next = Ops.updateState(model, s.element_id, { [s.field]: value });
     } else if (s.field === 'direction' && value === 'reverse') {
@@ -978,7 +995,7 @@ if (typeof document !== 'undefined') (() => {
       if (!data.suggestions.length) out.append(html('p', { class: 'hint', text: 'No corrections suggested.' }));
       for (const s of data.suggestions) {
         const card = html('div', { class: 'suggestion' }, [
-          html('div', {}, [html('strong', { text: `${s.element_id}.${s.field} → ${s.suggested_value === null ? 'null' : JSON.stringify(s.suggested_value)}` }), html('span', { class: 'hint', text: `  confidence ${(s.confidence * 100).toFixed(0)}%` })]),
+          html('div', {}, [html('strong', { text: s.field === 'add_transition' ? `Add transition ${s.element_id} → ${s.suggested_value}` : `${s.element_id}.${s.field} → ${s.suggested_value === null ? 'null' : JSON.stringify(s.suggested_value)}` }), html('span', { class: 'hint', text: `  confidence ${(s.confidence * 100).toFixed(0)}%` })]),
           html('div', { class: 'hint', text: s.evidence }),
         ]);
         const buttons = html('div', { class: 'row-buttons' }, [

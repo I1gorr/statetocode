@@ -299,8 +299,7 @@ def trace_from(mask: Any, region_map: Any, regions: list[StateRegion], start: tu
                 quality = 1.0 - weak_steps / max(1, len(path))
                 if snapped is not None and snapped != source:
                     return Trace(source, start, path, snapped, bridged, quality * 0.9)
-                if snapped == source and source_region is not None and travelled > source_region.radius and \
-                        max(math.dist(p, source_region.center) for p in path) > source_region.radius * 1.35 + 6:
+                if snapped == source and source_region is not None and _left_vicinity(path, source_region, travelled):
                     return Trace(source, start, path, source, bridged, quality * 0.9)
                 return Trace(source, start, path, None, bridged, quality)
         else:
@@ -324,11 +323,24 @@ def trace_from(mask: Any, region_map: Any, regions: list[StateRegion], start: tu
                 return Trace(source, start, path, region, bridged, 1.0 - weak_steps / max(1, len(path)))
             # Re-entering the source is a self-loop only after leaving its vicinity.
             assert source_region is not None
-            furthest = max(math.dist(p, source_region.center) for p in path)
-            if furthest > source_region.radius * 1.35 + 6 and travelled > source_region.radius:
+            if _left_vicinity(path, source_region, travelled):
                 return Trace(source, start, path, source, bridged, 1.0 - weak_steps / max(1, len(path)))
             return Trace(source, start, path, None, bridged, 0.0)
     return Trace(source, start, path, None, bridged, 0.0)
+
+
+def _left_vicinity(path: list[tuple[float, float]], region: StateRegion, travelled: float) -> bool:
+    """A path returning to its own state is a self-loop only if it went clearly
+    outside the state's box (works for circles and wide rounded rectangles)."""
+    x1, y1, x2, y2 = region.bbox
+    half = min(x2 - x1, y2 - y1) / 2
+
+    def outside(p: tuple[float, float]) -> float:
+        dx = max(x1 - p[0], 0.0, p[0] - x2)
+        dy = max(y1 - p[1], 0.0, p[1] - y2)
+        return math.hypot(dx, dy)
+
+    return max(outside(p) for p in path) > max(10.0, 0.3 * half) and travelled > max(30.0, half)
 
 
 def _nearby_region(region_map: Any, x: float, y: float, radius: float) -> int | None:
@@ -573,9 +585,47 @@ def trace_arrows(
         arrows.append(arrow)
         import cv2
         cv2.polylines(coverage, [np.array(arrow.path, np.int32)], False, 1, 2 * radius + 1)
+    if arrowheads:
+        _enforce_head_exclusivity(arrows, arrowheads, stroke)
     debug = {"stroke_width": stroke, "ports": [p.__dict__ for p in ports], "traces": len(traces),
              "region_map": region_map}
     return arrows, debug
+
+
+def _enforce_head_exclusivity(arrows: list[TracedArrow], arrowheads, stroke: float) -> None:
+    """Each detected arrowhead is the head of at most one arrow.
+
+    Shallow crossings (e.g. two arcs between the same states) can make two
+    traces claim the same head. Arrows are processed from the most to the least
+    confident; one whose head is already taken is flipped when its other end
+    has a free arrowhead, and otherwise left for review.
+    """
+    slack = stroke + 4
+
+    def box_at(point: tuple[float, float]) -> int | None:
+        hits = [(math.dist(point, ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)), i)
+                for i, (b, _) in enumerate(arrowheads) if _point_near_box(point, b, slack)]
+        return min(hits)[1] if hits else None
+
+    claimed: set[int] = set()
+    candidates = [a for a in arrows if not a.is_initial_marker and a.tail_state is not None
+                  and a.head_state is not None and a.tail_state != a.head_state]
+    for arrow in sorted(candidates, key=lambda a: (-a.direction_known, -a.direction_confidence)):
+        head_box, tail_box = box_at(arrow.path[-1]), box_at(arrow.path[0])
+        if head_box is not None and head_box not in claimed:
+            claimed.add(head_box)
+            if not arrow.direction_known and (tail_box is None or tail_box in claimed):
+                arrow.direction_known = True
+                arrow.notes.append("direction fixed by the only free arrowhead")
+            continue
+        if tail_box is not None and tail_box not in claimed:
+            claimed.add(tail_box)
+            arrow.tail_state, arrow.head_state = arrow.head_state, arrow.tail_state
+            arrow.path = arrow.path[::-1]
+            arrow.direction_known = True
+            arrow.direction_confidence = max(arrow.direction_confidence, 0.5)
+            arrow.notes = [n for n in arrow.notes if not n.startswith("arrowhead evidence")]
+            arrow.notes.append("direction taken from the free arrowhead (the other one belongs to another arrow)")
 
 
 def _same_arrow(a: TracedArrow, b: TracedArrow, tolerance: float) -> bool:

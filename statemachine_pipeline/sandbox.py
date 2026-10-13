@@ -54,13 +54,19 @@ cls = namespace.get("StateMachine")
 if cls is None:
     raise RuntimeError("generated code must define StateMachine")
 
-def make(guard_values):
+def make(guard_values, start=None):
     guard_names = namespace.get("GUARDS", ())
     guards = {name: (lambda ctx, name=name: bool(guard_values.get(name, False))) for name in guard_names}
     try:
-        return cls(guards=guards)
+        machine = cls(guards=guards, initial_state=start) if start is not None else cls(guards=guards)
     except TypeError:
-        return cls()
+        try:
+            machine = cls(guards=guards)
+        except TypeError:
+            machine = cls()
+        if start is not None:
+            machine.current_state = start
+    return machine
 
 if mode == "events":
     machine = make(payload.get("guards") or {})
@@ -73,9 +79,9 @@ else:
     results = []
     for trace in payload:
         guard_values = {}
-        machine = make(guard_values)
+        machine = make(guard_values, trace["start"])
         observed = []
-        for step in trace:
+        for step in trace["steps"]:
             guard_values.clear()
             guard_values.update(step["guards"])
             try:
@@ -125,7 +131,7 @@ def _run(source: str, mode: str, payload: Any, timeout: float) -> tuple[str | No
         return completed.stdout, None
 
 
-def run_conformance(source: str, traces: list[list[dict[str, Any]]], *, timeout: float = 10.0) -> SandboxOutcome:
+def run_conformance(source: str, traces: list[dict[str, Any]], *, timeout: float = 10.0) -> SandboxOutcome:
     stdout, error = _run(source, "plan", traces, timeout)
     if error is not None:
         return SandboxOutcome([], error)

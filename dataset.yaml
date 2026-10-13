@@ -1,4 +1,6 @@
-path: C:/statetocode/dataset
+# Legacy v1 dataset (2 classes). The current dataset is dataset_v2/dataset.yaml,
+# written by generate_dataset.py.
+path: dataset
 
 train: images/train
 val: images/val

@@ -1,0 +1,30 @@
+{
+  "assumptions": [],
+  "backend": "template",
+  "conformance": {
+    "covered_transitions": [
+      "T0",
+      "T1",
+      "T2",
+      "T3",
+      "T4"
+    ],
+    "errors": [],
+    "mismatches": [],
+    "started_outside_initial": [
+      "T0",
+      "T1",
+      "T2",
+      "T4"
+    ],
+    "steps_checked": 11,
+    "traces": 10,
+    "uncovered_transitions": [],
+    "valid": true
+  },
+  "model": null,
+  "source_code": "examples/tcp_like/state_machine.py",
+  "target_language": "python",
+  "tests": "examples/tcp_like/test_state_machine.py",
+  "warnings": []
+}

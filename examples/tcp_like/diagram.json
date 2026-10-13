@@ -1,0 +1,596 @@
+{
+  "diagram_id": "diagram",
+  "metadata": {
+    "association": "stroke-tracing",
+    "source": "image",
+    "stroke_width": 5.73,
+    "warnings": []
+  },
+  "network": null,
+  "schema_version": "1.1",
+  "source_image": {
+    "height": 640,
+    "path": "examples/tcp_like/diagram.png",
+    "sha256": "f32331bf2355cf99d03780af05d4245291fc625020c33e5d01907a750d337f85",
+    "width": 640
+  },
+  "states": [
+    {
+      "bbox": [
+        223.1,
+        69.4,
+        345.3,
+        141.4
+      ],
+      "confidence": 0.9671,
+      "id": "S0",
+      "label": "Connected",
+      "label_confidence": 0.91,
+      "position": {
+        "x": 284.2,
+        "y": 105.4
+      },
+      "provenance": "ocr",
+      "shape": "rounded_rect",
+      "type": "normal"
+    },
+    {
+      "bbox": [
+        476.0,
+        186.9,
+        568.0,
+        279.3
+      ],
+      "confidence": 0.9704,
+      "id": "S1",
+      "label": "Connecting",
+      "label_confidence": 0.89,
+      "position": {
+        "x": 522.0,
+        "y": 233.1
+      },
+      "provenance": "ocr",
+      "shape": "circle",
+      "type": "normal"
+    },
+    {
+      "bbox": [
+        306.1,
+        336.0,
+        400.0,
+        430.2
+      ],
+      "confidence": 0.9729,
+      "id": "S2",
+      "label": "Established",
+      "label_confidence": 0.89,
+      "position": {
+        "x": 353.1,
+        "y": 383.1
+      },
+      "provenance": "ocr",
+      "shape": "circle",
+      "type": "initial"
+    },
+    {
+      "bbox": [
+        191.8,
+        510.0,
+        264.1,
+        581.9
+      ],
+      "confidence": 0.9739,
+      "id": "S3",
+      "label": "Listen",
+      "label_confidence": 0.9,
+      "position": {
+        "x": 228.0,
+        "y": 545.9
+      },
+      "provenance": "ocr",
+      "shape": "circle",
+      "type": "normal"
+    }
+  ],
+  "transitions": [
+    {
+      "action": "notify",
+      "confidence": 0.899,
+      "direction": "loop",
+      "event": "connect",
+      "guard": null,
+      "id": "T0",
+      "kind": "network_event",
+      "label": "connect / notify",
+      "label_bbox": [
+        142.2,
+        7.5,
+        264.6,
+        25.4
+      ],
+      "label_confidence": 0.913,
+      "network": {
+        "event_type": "connect",
+        "packet": null,
+        "protocol": null
+      },
+      "points": [
+        {
+          "x": 225.6,
+          "y": 60.9
+        },
+        {
+          "x": 228.6,
+          "y": 58.2
+        },
+        {
+          "x": 231.8,
+          "y": 55.9
+        },
+        {
+          "x": 234.8,
+          "y": 53.2
+        },
+        {
+          "x": 238.1,
+          "y": 50.9
+        },
+        {
+          "x": 241.7,
+          "y": 49.0
+        },
+        {
+          "x": 245.2,
+          "y": 47.3
+        },
+        {
+          "x": 249.0,
+          "y": 46.0
+        },
+        {
+          "x": 252.9,
+          "y": 45.1
+        },
+        {
+          "x": 257.1,
+          "y": 45.9
+        },
+        {
+          "x": 260.9,
+          "y": 45.3
+        },
+        {
+          "x": 263.4,
+          "y": 50.8
+        },
+        {
+          "x": 265.9,
+          "y": 54.4
+        },
+        {
+          "x": 268.9,
+          "y": 57.1
+        },
+        {
+          "x": 272.2,
+          "y": 59.3
+        },
+        {
+          "x": 275.7,
+          "y": 59.7
+        },
+        {
+          "x": 277.6,
+          "y": 56.0
+        },
+        {
+          "x": 278.6,
+          "y": 54.2
+        }
+      ],
+      "provenance": "ocr",
+      "source": "S0",
+      "target": "S0"
+    },
+    {
+      "action": null,
+      "confidence": 0.8604,
+      "direction": "forward",
+      "event": "error",
+      "guard": null,
+      "id": "T1",
+      "kind": "network_event",
+      "label": "error",
+      "label_bbox": [
+        386.4,
+        182.4,
+        422.9,
+        193.8
+      ],
+      "label_confidence": 0.89,
+      "network": {
+        "event_type": "failure",
+        "packet": null,
+        "protocol": null
+      },
+      "points": [
+        {
+          "x": 354.0,
+          "y": 142.3
+        },
+        {
+          "x": 360.9,
+          "y": 146.3
+        },
+        {
+          "x": 367.9,
+          "y": 150.3
+        },
+        {
+          "x": 374.8,
+          "y": 154.3
+        },
+        {
+          "x": 382.2,
+          "y": 157.5
+        },
+        {
+          "x": 389.1,
+          "y": 161.5
+        },
+        {
+          "x": 396.3,
+          "y": 165.0
+        },
+        {
+          "x": 403.2,
+          "y": 169.0
+        },
+        {
+          "x": 410.2,
+          "y": 173.0
+        },
+        {
+          "x": 417.1,
+          "y": 177.0
+        },
+        {
+          "x": 424.5,
+          "y": 180.2
+        },
+        {
+          "x": 431.5,
+          "y": 184.2
+        },
+        {
+          "x": 438.4,
+          "y": 188.2
+        },
+        {
+          "x": 445.3,
+          "y": 192.2
+        },
+        {
+          "x": 452.2,
+          "y": 196.2
+        },
+        {
+          "x": 459.7,
+          "y": 199.3
+        },
+        {
+          "x": 466.8,
+          "y": 203.0
+        },
+        {
+          "x": 484.1,
+          "y": 205.0
+        }
+      ],
+      "provenance": "ocr",
+      "source": "S0",
+      "target": "S1"
+    },
+    {
+      "action": null,
+      "confidence": 0.8408,
+      "direction": "forward",
+      "event": null,
+      "guard": null,
+      "id": "T2",
+      "kind": "state_change",
+      "label": null,
+      "label_bbox": null,
+      "label_confidence": null,
+      "network": null,
+      "points": [
+        {
+          "x": 312.5,
+          "y": 150.0
+        },
+        {
+          "x": 310.9,
+          "y": 161.9
+        },
+        {
+          "x": 309.8,
+          "y": 173.9
+        },
+        {
+          "x": 309.9,
+          "y": 186.0
+        },
+        {
+          "x": 309.1,
+          "y": 198.1
+        },
+        {
+          "x": 308.6,
+          "y": 210.1
+        },
+        {
+          "x": 310.3,
+          "y": 222.3
+        },
+        {
+          "x": 312.8,
+          "y": 234.3
+        },
+        {
+          "x": 314.9,
+          "y": 246.3
+        },
+        {
+          "x": 318.2,
+          "y": 258.1
+        },
+        {
+          "x": 321.2,
+          "y": 269.8
+        },
+        {
+          "x": 326.3,
+          "y": 280.9
+        },
+        {
+          "x": 332.6,
+          "y": 291.6
+        },
+        {
+          "x": 338.0,
+          "y": 302.4
+        },
+        {
+          "x": 344.7,
+          "y": 312.6
+        },
+        {
+          "x": 351.4,
+          "y": 322.6
+        },
+        {
+          "x": 368.7,
+          "y": 331.7
+        }
+      ],
+      "provenance": "detector",
+      "source": "S0",
+      "target": "S2"
+    },
+    {
+      "action": null,
+      "confidence": 0.8655,
+      "direction": "forward",
+      "event": "accept",
+      "guard": "n<3",
+      "id": "T3",
+      "kind": "network_event",
+      "label": "accept [n<3]",
+      "label_bbox": [
+        410.0,
+        329.6,
+        519.2,
+        348.1
+      ],
+      "label_confidence": 0.87,
+      "network": {
+        "event_type": "accept",
+        "packet": null,
+        "protocol": null
+      },
+      "points": [
+        {
+          "x": 372.3,
+          "y": 336.7
+        },
+        {
+          "x": 387.7,
+          "y": 335.7
+        },
+        {
+          "x": 392.6,
+          "y": 332.2
+        },
+        {
+          "x": 398.6,
+          "y": 330.1
+        },
+        {
+          "x": 403.6,
+          "y": 326.9
+        },
+        {
+          "x": 409.3,
+          "y": 324.2
+        },
+        {
+          "x": 414.6,
+          "y": 321.2
+        },
+        {
+          "x": 419.3,
+          "y": 317.4
+        },
+        {
+          "x": 424.0,
+          "y": 313.6
+        },
+        {
+          "x": 428.9,
+          "y": 309.9
+        },
+        {
+          "x": 433.9,
+          "y": 306.3
+        },
+        {
+          "x": 438.2,
+          "y": 301.9
+        },
+        {
+          "x": 442.9,
+          "y": 297.9
+        },
+        {
+          "x": 446.9,
+          "y": 293.3
+        },
+        {
+          "x": 451.3,
+          "y": 289.0
+        },
+        {
+          "x": 455.3,
+          "y": 284.4
+        },
+        {
+          "x": 458.2,
+          "y": 279.2
+        },
+        {
+          "x": 462.9,
+          "y": 275.0
+        },
+        {
+          "x": 465.9,
+          "y": 269.8
+        },
+        {
+          "x": 468.9,
+          "y": 264.6
+        },
+        {
+          "x": 472.4,
+          "y": 260.1
+        },
+        {
+          "x": 473.6,
+          "y": 258.4
+        }
+      ],
+      "provenance": "ocr",
+      "source": "S2",
+      "target": "S1"
+    },
+    {
+      "action": null,
+      "confidence": 0.8604,
+      "direction": "forward",
+      "event": "SYN-ACK",
+      "guard": null,
+      "id": "T4",
+      "kind": "network_event",
+      "label": "SYN-ACK",
+      "label_bbox": [
+        181.9,
+        313.1,
+        253.2,
+        328.2
+      ],
+      "label_confidence": 0.9,
+      "network": {
+        "event_type": "accept",
+        "packet": "SYN-ACK",
+        "protocol": "TCP"
+      },
+      "points": [
+        {
+          "x": 234.7,
+          "y": 511.1
+        },
+        {
+          "x": 237.3,
+          "y": 479.8
+        },
+        {
+          "x": 240.1,
+          "y": 458.0
+        },
+        {
+          "x": 242.4,
+          "y": 436.1
+        },
+        {
+          "x": 245.3,
+          "y": 414.2
+        },
+        {
+          "x": 248.6,
+          "y": 392.5
+        },
+        {
+          "x": 251.4,
+          "y": 370.6
+        },
+        {
+          "x": 254.3,
+          "y": 348.8
+        },
+        {
+          "x": 256.6,
+          "y": 326.9
+        },
+        {
+          "x": 259.4,
+          "y": 305.0
+        },
+        {
+          "x": 262.8,
+          "y": 283.3
+        },
+        {
+          "x": 265.6,
+          "y": 261.4
+        },
+        {
+          "x": 268.4,
+          "y": 239.6
+        },
+        {
+          "x": 271.8,
+          "y": 217.8
+        },
+        {
+          "x": 274.1,
+          "y": 195.9
+        },
+        {
+          "x": 276.5,
+          "y": 174.0
+        },
+        {
+          "x": 279.3,
+          "y": 152.1
+        },
+        {
+          "x": 279.1,
+          "y": 150.1
+        }
+      ],
+      "provenance": "ocr",
+      "source": "S3",
+      "target": "S0"
+    }
+  ],
+  "uncertainties": []
+}

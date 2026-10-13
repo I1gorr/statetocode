@@ -195,15 +195,25 @@ def _state_geometry(mask: Any, bbox: tuple[float, float, float, float]) -> tuple
     if shape != "circle":
         return shape, False
     # Radial profile: fraction of angles with ink at each relative radius.
-    profile = []
-    for step in range(40, 101, 2):
-        factor = step / 100
-        hits = sum(ink_at(cx + rx * factor * math.cos(a), cy + ry * factor * math.sin(a))
-                   for a in (2 * math.pi * k / 90 for k in range(90)))
-        profile.append((factor, hits / 90))
-    outer = max(range(len(profile)), key=lambda i: profile[i][1])
-    inner_peak = max((p for f, p in profile if f < profile[outer][0] - 0.1 and f > 0.55), default=0.0)
-    return shape, inner_peak > 0.55
+    # Radial ink profiles: ``plain`` samples one radius per angle; ``banded``
+    # counts an angle if any radius in a small band is ink, so thin blurred
+    # inner rings still register. The gap between rings uses ``plain``.
+    angles = [2 * math.pi * k / 90 for k in range(90)]
+
+    def fraction(factor: float, band: tuple[float, ...]) -> float:
+        return sum(any(ink_at(cx + rx * (factor + d) * math.cos(a), cy + ry * (factor + d) * math.sin(a))
+                       for d in band) for a in angles) / 90
+
+    factors = [step / 100 for step in range(40, 106, 2)]
+    plain = {f: fraction(f, (0.0,)) for f in factors}
+    banded = {f: fraction(f, (-0.015, 0.0, 0.015)) for f in factors}
+    outer = max((f for f in factors if f >= 0.85), key=lambda f: (plain[f], -abs(f - 1.0)))
+    inner_candidates = [f for f in factors if 0.55 < f < outer - 0.1]
+    if not inner_candidates:
+        return shape, False
+    inner = max(inner_candidates, key=lambda f: banded[f])
+    gap = min(plain[f] for f in factors if inner < f < outer)
+    return shape, banded[inner] > 0.6 and gap < 0.5 * min(banded[inner], plain[outer])
 
 
 def _point_segment_distance(p, a, b) -> float:
