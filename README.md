@@ -208,7 +208,25 @@ truth by box IoU (Hungarian assignment), never by ID. Thresholds were set on the
 
 Held-out test results (`python main.py compare outputs/eval_*.json`):
 
-RESULTS_TABLE
+| Metric | A: original | B: new pipeline, v1 model | C: new pipeline, v2 model |
+|---|---|---|---|
+| State F1 | 0.877 | 0.877 | 1.000 |
+| Transition precision | 0.282 | 0.696 | 0.950 |
+| Transition recall | 0.370 | 0.505 | 0.908 |
+| Transition F1 (directed) | 0.320 | 0.585 | 0.928 |
+| Transition F1 (undirected) | 0.486 | 0.717 | 0.957 |
+| Endpoint accuracy | 0.614 | 0.793 | 0.964 |
+| Initial-state accuracy | 0.000 | 0.519 | 0.983 |
+| Final-state F1 | n/a | 0.279 | 0.997 |
+| State OCR exact | 0.000 | 0.835 | 0.847 |
+| State OCR CER | 1.000 | 0.058 | 0.052 |
+| Label OCR exact | 0.000 | 0.214 | 0.654 |
+| Label OCR CER | 1.000 | 0.617 | 0.228 |
+| Event exact | 0.000 | 0.254 | 0.747 |
+| Graph exact (structure) | 0.000 | 0.089 | 0.719 |
+| Graph exact (with labels) | 0.000 | 0.019 | 0.269 |
+| Generated-code conformance | 0.994 | 0.994 | 1.000 |
+| Diagrams | 360 | 360 | 360 |
 
 * **A**: the original pipeline: 2-class model, box geometry, nearest-centre association, no OCR.
 * **B**: the original 2-class model with the new tracing, OCR and semantics (pipeline effect only).
