@@ -55,6 +55,16 @@ Network-topology diagrams (circles joined by strokes) still use the separate
 `network-1.0` contract: `python main.py IMAGE --diagram-type network`. Petri nets:
 `--diagram-type petri-net` with a Petri-net model.
 
+### Test images
+
+`python make_test_images.py` writes `test_images/` (35 images, fixed seeds, never used
+for training): generic and network-protocol state machines with `.truth.json` ground
+truth, hand-laid-out hard cases (crossings, bidirectional arcs and loops, missing
+arrowhead, dangling arrow, missing initial marker, a TCP-style handshake), photo-like
+variants (perspective, shading, low contrast), network-topology diagrams
+(`--diagram-type network`) and the original `images/test1.png`. See
+`test_images/README.md` for what each image should produce.
+
 ### Editor (`python main.py serve`)
 
 Upload an image and the detections are shown over it, next to the reconstructed graph:
@@ -72,6 +82,11 @@ Upload an image and the detections are shown over it, next to the reconstructed 
   the graph. Import a JSON file.
 * **Code**: generate (template or Gemini) and verify; the tab shows a *stale* badge
   as soon as the graph changes after generation.
+* **Network topology** (Inspector tab, bottom panel): add devices by name, choose which
+  states each device runs, then connect two devices with the **Connect devices** form
+  (from, to, optional medium/label) or click **Link devices on canvas** and click two
+  device boxes. Self-links and duplicate links are refused; devices without states can be
+  dragged on the canvas.
 * **Explain**: Gemini explanation and image-based correction suggestions, each accepted
   or rejected by you.
 * **Export**: JSON, SVG of the graph, generated code, generated tests.

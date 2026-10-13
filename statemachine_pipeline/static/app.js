@@ -123,18 +123,39 @@ const Ops = (() => {
     return out;
   }
 
-  function addDevice(m, label, stateIds = []) {
+  function addDevice(m, label, stateIds = [], position = null) {
     const out = ensureNetwork(m);
     const id = nextId(out.network.devices, 'D');
-    out.network.devices.push({ id, label: label || null, role: null, state_ids: stateIds, position: null });
+    if (!position && !stateIds.length) {
+      // Standalone devices get their own spot in a row above the states.
+      const ys = out.states.map((s) => (s.position || { y: 0 }).y);
+      const xs = out.states.map((s) => (s.position || { x: 0 }).x);
+      const top = (ys.length ? Math.min(...ys) : 100) - 110;
+      const left = xs.length ? Math.min(...xs) : 80;
+      position = { x: left + 130 * out.network.devices.length, y: top };
+    }
+    out.network.devices.push({ id, label: label || null, role: null, state_ids: stateIds, position });
     return [out, id];
   }
 
-  function addLink(m, source, target, medium = null) {
+  /* Connect two devices. Throws on self-links, unknown devices and duplicates. */
+  function addLink(m, source, target, medium = null, label = null) {
     const out = ensureNetwork(m);
+    const ids = new Set(out.network.devices.map((d) => d.id));
+    if (!ids.has(source) || !ids.has(target)) throw new Error('Choose two existing devices');
+    if (source === target) throw new Error('A device cannot be linked to itself');
+    if (out.network.links.some((l) => (l.source === source && l.target === target) || (l.source === target && l.target === source))) {
+      throw new Error(`${source} and ${target} are already linked`);
+    }
     const id = nextId(out.network.links, 'L');
-    out.network.links.push({ id, source, target, medium, label: null });
+    out.network.links.push({ id, source, target, medium: medium || null, label: label || null });
     return [out, id];
+  }
+
+  function updateLink(m, id, changes) {
+    const out = ensureNetwork(m);
+    out.network.links = out.network.links.map((l) => (l.id === id ? { ...l, ...changes } : l));
+    return out;
   }
 
   function deleteDevice(m, id) {
@@ -260,7 +281,7 @@ const Ops = (() => {
 
   return { clone, nextId, emptyMachine, normalize, addState, updateState, deleteState, addTransition,
     updateTransition, reverseTransition, deleteTransition, resolveUncertainty, addDevice, addLink,
-    deleteDevice, deleteLink, autoLayout, transitionText, edgeGeometry, History };
+    deleteDevice, deleteLink, updateLink, autoLayout, transitionText, edgeGeometry, History };
 })();
 
 if (typeof module !== 'undefined') module.exports = Ops;
@@ -295,6 +316,8 @@ if (typeof document !== 'undefined') (() => {
   let session = { has_image: false, detections: [] };
   let view = { x: 0, y: 0, k: 1 };
   let connectFrom = null;
+  let linkMode = false;           // clicking two device boxes on the canvas links them
+  let linkFrom = null;
   let jsonDirty = false;
   let validateTimer = null;
 
@@ -406,12 +429,20 @@ if (typeof document !== 'undefined') (() => {
       for (const l of model.network.links || []) {
         const a = hulls[l.source], b = hulls[l.target];
         if (!a || !b) continue;
-        root.append(el('line', { class: 'link', x1: (a.x1 + a.x2) / 2, y1: (a.y1 + a.y2) / 2, x2: (b.x1 + b.x2) / 2, y2: (b.y1 + b.y2) / 2 }));
+        const ax = (a.x1 + a.x2) / 2, ay = (a.y1 + a.y2) / 2, bx = (b.x1 + b.x2) / 2, by = (b.y1 + b.y2) / 2;
+        const line = el('line', { class: 'link', x1: ax, y1: ay, x2: bx, y2: by });
+        line.append(el('title', {}, `${l.id}: ${l.source} ↔ ${l.target}${l.medium ? ' (' + l.medium + ')' : ''}`));
+        root.append(line);
+        if (l.medium || l.label) root.append(el('text', { class: 'link-label', x: (ax + bx) / 2, y: (ay + by) / 2 - 6, 'text-anchor': 'middle' }, [l.label, l.medium].filter(Boolean).join(' · ')));
       }
       for (const d of model.network.devices || []) {
         const box = hulls[d.id];
-        root.append(el('rect', { class: 'device', x: box.x1, y: box.y1, width: box.x2 - box.x1, height: box.y2 - box.y1, rx: 10 }));
-        root.append(el('text', { class: 'device-label', x: box.x1 + 6, y: box.y1 + 13 }, (d.label || d.id) + (d.role ? ` (${d.role})` : '')));
+        const group = el('g', { class: 'device-group' + (linkFrom === d.id ? ' pending' : ''), 'data-device': d.id, tabindex: '0', role: 'button',
+          'aria-label': `Network device ${d.label || d.id}` });
+        group.append(el('rect', { class: 'device', x: box.x1, y: box.y1, width: box.x2 - box.x1, height: box.y2 - box.y1, rx: 10 }));
+        group.append(el('text', { class: 'device-label', x: box.x1 + 6, y: box.y1 + 13 }, (d.label || d.id) + (d.role ? ` (${d.role})` : '')));
+        attachDeviceHandlers(group, d, !(d.state_ids || []).length);
+        root.append(group);
       }
     }
 
@@ -516,6 +547,52 @@ if (typeof document !== 'undefined') (() => {
         commit(Ops.updateState(model, id, { position: { x: p.x + moves[e.key][0], y: p.y + moves[e.key][1] } }), `Moved ${id}`);
       }
     });
+  }
+
+  function attachDeviceHandlers(group, device, standalone) {
+    let dragging = null;
+    group.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (linkMode || !standalone || e.button !== 0) return;
+      dragging = { start: svgPoint(e), origin: { ...(device.position || { x: 0, y: 0 }) }, moved: false, snapshot: Ops.clone(model) };
+      group.setPointerCapture(e.pointerId);
+    });
+    group.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const p = svgPoint(e);
+      const dx = p.x - dragging.start.x, dy = p.y - dragging.start.y;
+      if (!dragging.moved && Math.hypot(dx, dy) < 3) return;
+      dragging.moved = true;
+      model.network.devices = model.network.devices.map((x) => (x.id === device.id ? { ...x, position: { x: dragging.origin.x + dx, y: dragging.origin.y + dy } } : x));
+      renderGraph();
+    });
+    group.addEventListener('pointerup', () => {
+      if (dragging && dragging.moved) { history.push(dragging.snapshot); afterChange(`Moved device ${device.id}`); }
+      dragging = null;
+    });
+    const pick = (e) => {
+      if (e) e.stopPropagation();
+      if (!linkMode) { status(`Device ${device.label || device.id}: use "Link devices on canvas" or the form in the Network panel to connect it`); return; }
+      if (!linkFrom) { linkFrom = device.id; renderGraph(); status(`Now click the device to connect to ${device.label || device.id}`); return; }
+      if (linkFrom === device.id) { linkFrom = null; renderGraph(); return; }
+      try {
+        const [next, id] = Ops.addLink(model, linkFrom, device.id);
+        linkFrom = null;
+        commit(next, `Linked devices (${id})`);
+      } catch (err) { linkFrom = null; renderGraph(); status(err.message, 'error'); }
+    };
+    group.addEventListener('click', pick);
+    group.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(e); });
+  }
+
+  function setLinkMode(on) {
+    linkMode = on;
+    linkFrom = null;
+    if (on) setConnect(false);
+    $('graph').classList.toggle('connecting', on);
+    renderGraph();
+    renderNetworkEditor();
+    status(on ? 'Link mode: click a device box on the canvas, then the device to connect it to (Esc to stop)' : 'Link mode off');
   }
 
   function connectClick(id) {
@@ -660,6 +737,7 @@ if (typeof document !== 'undefined') (() => {
     box.replaceChildren();
     const devices = (model.network && model.network.devices) || [];
     const links = (model.network && model.network.links) || [];
+    if (devices.length) box.append(html('h3', { text: `Devices (${devices.length})` }));
     for (const d of devices) {
       const states = html('select', { multiple: '', 'aria-label': `States of ${d.id}`, size: Math.min(4, Math.max(2, model.states.length)) });
       for (const s of model.states) {
@@ -683,24 +761,55 @@ if (typeof document !== 'undefined') (() => {
         field('States of this device', states),
       ]));
     }
-    for (const l of links) {
-      box.append(html('div', { class: 'list-row' }, [
-        html('span', { text: `${l.id}: ${l.source} ↔ ${l.target}${l.medium ? ' (' + l.medium + ')' : ''}` }),
-        html('button', { class: 'danger', text: 'Remove', onclick: () => commit(Ops.deleteLink(model, l.id), `Removed ${l.id}`) }),
+    const name = (id) => { const d = devices.find((x) => x.id === id); return d && d.label ? `${d.label} (${id})` : id; };
+
+    // Add a device
+    const newName = html('input', { id: 'new-device-name', placeholder: 'e.g. Client, Server, Router' });
+    const addDeviceNow = () => {
+      const [next, id] = Ops.addDevice(model, newName.value.trim() || null);
+      commit(next, `Added device ${id}`);
+    };
+    newName.addEventListener('keydown', (e) => { if (e.key === 'Enter') addDeviceNow(); });
+    box.append(html('h3', { text: 'Add a device' }), html('div', { class: 'list-row' }, [newName, html('button', { text: 'Add device', onclick: addDeviceNow })]));
+
+    // Connect two devices
+    box.append(html('h3', { text: 'Connect devices' }));
+    if (devices.length < 2) {
+      box.append(html('p', { class: 'hint', text: `Add at least two devices to connect them (${devices.length} so far).` }));
+    } else {
+      const options = devices.map((d) => [d.id, name(d.id)]);
+      const from = selectInput('link-from', options, devices[0].id, () => {});
+      const to = selectInput('link-to', options, devices[1].id, () => {});
+      const medium = html('input', { id: 'link-medium', placeholder: 'optional: Ethernet, Wi-Fi, VPN…' });
+      const label = html('input', { id: 'link-label', placeholder: 'optional: e.g. 192.168.1.0/24, port 443' });
+      box.append(html('div', { class: 'grid2' }, [field('From device', from), field('To device', to)]));
+      box.append(html('div', { class: 'grid2' }, [field('Medium', medium), field('Link label', label)]));
+      box.append(html('div', { class: 'row-buttons' }, [
+        html('button', { class: 'primary', id: 'connect-devices', text: 'Connect devices', onclick: () => {
+          try {
+            const [next, id] = Ops.addLink(model, from.value, to.value, medium.value.trim() || null, label.value.trim() || null);
+            commit(next, `Linked ${name(from.value)} ↔ ${name(to.value)} (${id})`);
+          } catch (err) { status(err.message, 'error'); }
+        } }),
+        html('button', { id: 'link-mode', 'aria-pressed': String(linkMode), text: linkMode ? 'Stop linking on canvas' : 'Link devices on canvas',
+          onclick: () => setLinkMode(!linkMode) }),
       ]));
     }
-    const buttons = [html('button', { text: 'Add device', onclick: () => { const label = prompt('Device name (e.g. Client, Server, Router)'); if (label === null) return; const [next, id] = Ops.addDevice(model, label.trim() || null); commit(next, `Added ${id}`); } })];
-    if (devices.length >= 2) {
-      buttons.push(html('button', { text: 'Add link', onclick: () => {
-        const ids = devices.map((d) => d.id).join(', ');
-        const a = prompt(`Link from device (${ids})`); if (!a) return;
-        const b = prompt(`to device (${ids})`); if (!b) return;
-        const medium = prompt('Medium (optional, e.g. Ethernet, Wi-Fi)') || null;
-        if (!devices.some((d) => d.id === a.trim()) || !devices.some((d) => d.id === b.trim())) { status('Unknown device id', 'error'); return; }
-        const [next, id] = Ops.addLink(model, a.trim(), b.trim(), medium); commit(next, `Added link ${id}`);
-      } }));
+
+    // Existing links
+    if (links.length) {
+      box.append(html('h3', { text: `Links (${links.length})` }));
+      for (const l of links) {
+        const medium = textInput(`l-${l.id}-medium`, l.medium, (v) => commit(Ops.updateLink(model, l.id, { medium: v }), `Updated ${l.id}`), 'medium');
+        box.append(html('div', { class: 'suggestion' }, [
+          html('div', { class: 'list-row' }, [
+            html('strong', { text: `${l.id}: ${name(l.source)} ↔ ${name(l.target)}` }),
+            html('button', { class: 'danger', text: 'Remove', onclick: () => commit(Ops.deleteLink(model, l.id), `Removed ${l.id}`) }),
+          ]),
+          medium,
+        ]));
+      }
     }
-    box.append(html('div', { class: 'row-buttons' }, buttons));
   }
 
   // ---------------------------------------------------------------- issues / json / code
@@ -825,7 +934,7 @@ if (typeof document !== 'undefined') (() => {
     let pan = null;
     svg.addEventListener('wheel', (e) => { e.preventDefault(); const rect = svg.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top); }, { passive: false });
     svg.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.state') || e.target.closest('.transition')) return;
+      if (e.target.closest('.state') || e.target.closest('.transition') || e.target.closest('.device-group')) return;
       pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
       svg.classList.add('panning');
       svg.setPointerCapture(e.pointerId);
@@ -1112,7 +1221,7 @@ if (typeof document !== 'undefined') (() => {
         if (selection.kind === 'state') { if (confirm(`Delete ${selection.id} and its transitions?`)) commit(Ops.deleteState(model, selection.id), `Deleted ${selection.id}`); }
         else commit(Ops.deleteTransition(model, selection.id), `Deleted ${selection.id}`);
         select(null);
-      } else if (e.key === 'Escape') { setConnect(false); renderGraph(); }
+      } else if (e.key === 'Escape') { setConnect(false); if (linkMode) setLinkMode(false); renderGraph(); }
     });
     setupCanvas();
   }

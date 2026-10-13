@@ -68,7 +68,11 @@ input, textarea, select { border: 1px solid var(--border); border-radius: 5px; p
 .arrowhead { fill: var(--ink); } .arrowhead.net { fill: var(--net); } .arrowhead.warn { fill: var(--warn); }
 .edge-label { font-size: 12px; fill: var(--ink); paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; stroke-linejoin: round; cursor: pointer; }
 .edge-label.missing { fill: var(--muted); font-style: italic; }
-.device { fill: none; stroke: var(--net); stroke-dasharray: 3 3; stroke-width: 1.5; }
+.device { fill: transparent; stroke: var(--net); stroke-dasharray: 3 3; stroke-width: 1.5; }
+.device-group { cursor: pointer; }
+.device-group:hover .device, .device-group:focus .device { stroke-width: 2.5; }
+.device-group.pending .device { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+.link-label { font-size: 11px; fill: var(--net); paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; }
 .device-label { font-size: 11px; fill: var(--net); font-weight: 600; }
 .link { stroke: var(--net); stroke-width: 4; stroke-opacity: .35; }
 .ov-box { fill: none; stroke-width: 1.5; }

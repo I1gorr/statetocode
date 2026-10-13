@@ -11,3 +11,4 @@ runs/
 .env
 *.pt
 data/
+test_images/

@@ -48,6 +48,8 @@ out.afterDelete = {states: deleted.states.map(s => s.id), transitions: deleted.t
 let n; [n] = Ops.addDevice(m, 'Client', [a, b]); let link; [n] = Ops.addDevice(n, 'Server', []); [n, link] = Ops.addLink(n, 'D0', 'D1', 'Ethernet');
 out.network = n.network;
 out.removedDevice = Ops.deleteDevice(n, 'D1').network.links.length;
+out.linkErrors = [['D0', 'D0'], ['D1', 'D0'], ['D0', 'D9']].map(([x, y]) => { try { Ops.addLink(n, x, y); return 'ok'; } catch (e) { return e.message; } });
+out.standalonePosition = n.network.devices[1].position !== null;
 out.layout = Ops.autoLayout(m).states.map(s => s.position);
 out.label = Ops.transitionText({event: 'connect', guard: 'n<3', action: 'log', label: 'x'});
 out.final = m;
@@ -73,6 +75,8 @@ def test_editor_operations():
     assert out["afterDelete"] == {"states": ["S1", "S2"], "transitions": ["T2"], "uncertainties": 0}
     assert out["network"]["links"] == [{"id": "L0", "source": "D0", "target": "D1", "medium": "Ethernet", "label": None}]
     assert out["removedDevice"] == 0
+    assert out["linkErrors"] == ["A device cannot be linked to itself", "D1 and D0 are already linked", "Choose two existing devices"]
+    assert out["standalonePosition"]
     assert len({(p["x"], p["y"]) for p in out["layout"]}) == 3
     assert out["label"] == "connect [n<3] / log"
 
