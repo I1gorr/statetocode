@@ -4,3 +4,7 @@ ultralytics
 google-genai
 python-dotenv
 pytest
+pytesseract
+jsonschema
+scipy
+pillow
