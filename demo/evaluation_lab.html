@@ -1,0 +1,1453 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><title>State Diagram to Code</title>
+<style>
+/* Layout concept: a deck of full-screen cards, one idea per card, scroll-snapped, with a sticky section bar and live charts on the data cards,
+   every chart paired with a table view, and a discussion tab written for questions. */
+:root {
+  color-scheme: light;
+  --plane: #f9f9f7; --surface: #fcfcfb;
+  --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.05);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300;
+  --pa: #c3c2b7; --pb: #898781;
+  --good: #006300;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane: #0d0d0d; --surface: #1a1a19;
+    --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.06);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+    --pa: #55544f; --pb: #898781;
+    --good: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0d0d0d; --surface: #1a1a19;
+  --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.06);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300;
+  --pa: #55544f; --pb: #898781;
+  --good: #0ca30c;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--plane); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: clamp(16px, 3vw, 32px); padding-block: 0 56px; }
+header.top { padding-block: 28px 16px; display: flex; flex-direction: column; gap: 6px; }
+header.top h1 { font-size: clamp(24px, 3.4vw, 32px); line-height: 1.15; margin: 0; font-weight: 650; text-wrap: balance; }
+header.top p { margin: 0; color: var(--ink2); max-width: 78ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 13px; padding-top: 6px; }
+.meta b { color: var(--ink2); font-weight: 600; }
+
+nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--plane); border-bottom: 1px solid var(--grid); display: flex; gap: 2px; overflow-x: auto; margin-inline: calc(-1 * clamp(16px, 3vw, 32px)); padding-inline: clamp(16px, 3vw, 32px); }
+nav.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 12px 14px 10px; cursor: pointer; color: var(--ink2); white-space: nowrap; font-weight: 500; }
+nav.tabs button:hover { color: var(--ink); background: var(--wash); }
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--s1); font-weight: 650; }
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; border-radius: 4px; }
+
+section.panel { padding-top: 24px; display: flex; flex-direction: column; gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 18px 20px 16px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.card h2 { font-size: 17px; margin: 0; font-weight: 650; text-wrap: balance; }
+.card h3 { font-size: 15px; margin: 0; font-weight: 650; }
+.sub { color: var(--ink2); margin: 0; max-width: 80ch; font-size: 14px; }
+.src { color: var(--muted); font-size: 12px; margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px 16px; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; }
+.filters .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.filters label, .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border: 1px solid var(--axis); border-radius: 999px; background: none; cursor: pointer; font-size: 13px; color: var(--ink2); }
+.chip i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
+.chip[aria-pressed="true"] { color: var(--ink); border-color: var(--ink2); background: var(--wash); }
+.chip[aria-pressed="false"] i { opacity: .35; }
+.seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 5px 12px; cursor: pointer; font-size: 13px; color: var(--ink2); }
+.seg button + button { border-left: 1px solid var(--axis); }
+.seg button[aria-pressed="true"] { background: var(--wash); color: var(--ink); font-weight: 650; }
+.btn { background: none; border: 1px solid var(--axis); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-size: 13px; color: var(--ink2); }
+.btn:hover { color: var(--ink); background: var(--wash); }
+select { background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; font-size: 13px; }
+input[type=range] { width: min(260px, 60vw); accent-color: var(--s1); }
+.confval { font-family: var(--mono); font-size: 15px; font-weight: 600; min-width: 3.2em; }
+
+.chart { position: relative; min-width: 0; }
+.chart svg { display: block; max-width: 100%; overflow: visible; }
+.chart text { font-family: var(--font); font-size: 12px; fill: var(--muted); }
+.chart .axl { fill: var(--ink2); }
+.keys { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink2); }
+.keys span { display: inline-flex; align-items: center; gap: 7px; }
+.keys i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c); }
+.keys i.sq { height: 10px; width: 10px; border-radius: 2px; }
+
+.tip { position: fixed; z-index: 30; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--axis); border-radius: 6px; padding: 8px 10px; font-size: 12.5px; min-width: 140px; max-width: 280px; box-shadow: 0 2px 10px rgba(0,0,0,.14); }
+.tip .tt { color: var(--ink2); margin-bottom: 4px; font-weight: 600; }
+.tip .tr { display: flex; align-items: center; gap: 8px; line-height: 1.55; }
+.tip .tr i { width: 12px; height: 3px; border-radius: 2px; background: var(--c); flex: none; }
+.tip .tr b { font-family: var(--mono); font-weight: 650; margin-left: auto; padding-left: 12px; }
+.tip .tr span { color: var(--ink2); }
+
+.readout { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.readout .v { font-size: 26px; font-weight: 650; line-height: 1.15; }
+
+table.t { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+table.t th, table.t td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+table.t th:first-child, table.t td:first-child { text-align: left; }
+table.t th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+table.t tr.hl td { background: var(--wash); }
+.tscroll { overflow-x: auto; }
+details.tv > summary { cursor: pointer; color: var(--ink2); font-size: 13px; padding: 2px 0; }
+details.tv[open] > summary { margin-bottom: 8px; }
+
+.brow { display: grid; grid-template-columns: minmax(84px, 130px) minmax(0, 1fr); gap: 4px 14px; align-items: center; padding-block: 7px; border-bottom: 1px solid var(--grid); }
+.brow:last-child { border-bottom: 0; }
+.brow .bl { font-size: 13.5px; color: var(--ink2); overflow-wrap: anywhere; }
+.bars { display: flex; flex-direction: column; gap: 4px; }
+.bline { display: grid; grid-template-columns: minmax(0, 1fr) 58px; align-items: center; gap: 8px; border-radius: 3px; }
+.bline:hover, .bline:focus-visible { background: var(--wash); }
+.btrack { height: 14px; display: flex; }
+.bar { height: 14px; border-radius: 0 4px 4px 0; min-width: 2px; background: var(--c); }
+.bval { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack .srow { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+.stack .nm { font-weight: 650; font-size: 13.5px; color: var(--ink2); }
+.stack .tr2 { display: flex; gap: 2px; height: 22px; }
+.stack .tr2 span { height: 22px; background: var(--c); min-width: 2px; }
+.stack .tr2 span:last-child { border-radius: 0 4px 4px 0; }
+.stack .cap { grid-column: 2; font-size: 12.5px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+
+.cmwrap { overflow-x: auto; }
+.cm { display: grid; grid-template-columns: 112px repeat(7, minmax(62px, 1fr)); gap: 2px; min-width: 620px; }
+.cm .h { font-size: 12px; color: var(--muted); padding: 4px 2px; text-align: center; align-self: end; line-height: 1.2; }
+.cm .rh { font-size: 13px; color: var(--ink2); padding: 0 8px 0 0; text-align: right; align-self: center; }
+.cm .c { height: 40px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12.5px; border-radius: 3px; background: color-mix(in srgb, var(--s1) calc(var(--t) * 100%), var(--surface)); color: var(--ink); }
+.cm .c.hi { color: #fff; }
+.cm .c.z { color: var(--muted); background: transparent; }
+.cm .c:hover, .cm .c:focus-visible { outline: 2px solid var(--ink2); outline-offset: -2px; }
+
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: center; }
+@media (max-width: 760px) { .hero { grid-template-columns: minmax(0, 1fr); } }
+.hero .big { font-size: clamp(56px, 11vw, 84px); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
+.hero .cap { color: var(--ink2); margin: 6px 0 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { border: 1px solid var(--ring); border-radius: 8px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 2px; }
+.tile .k { color: var(--muted); font-size: 12px; }
+.tile .v { font-size: 26px; font-weight: 650; line-height: 1.15; }
+.tile .n { color: var(--ink2); font-size: 12.5px; }
+.guide { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.guide button { text-align: left; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.guide button:hover { border-color: var(--axis); background: var(--wash); }
+.guide b { font-size: 14.5px; }
+.guide span { color: var(--ink2); font-size: 13.5px; }
+
+.calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.calc .eq { border: 1px solid var(--ring); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.calc .eq .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.calc .eq code { font-family: var(--mono); font-size: 13.5px; color: var(--ink2); overflow-wrap: anywhere; }
+.calc .eq .r { font-size: 24px; font-weight: 650; }
+
+.qa { display: flex; flex-direction: column; gap: 8px; }
+.qa details { background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 0 16px; }
+.qa summary { cursor: pointer; padding: 13px 0; font-weight: 600; list-style: none; display: flex; gap: 10px; align-items: baseline; }
+.qa summary::-webkit-details-marker { display: none; }
+.qa summary::before { content: "+"; font-family: var(--mono); color: var(--muted); width: 1ch; flex: none; }
+.qa details[open] summary::before { content: "\2212"; }
+.qa .body { padding: 0 0 14px 22px; color: var(--ink2); display: flex; flex-direction: column; gap: 8px; max-width: 86ch; }
+.qa .body p { margin: 0; }
+.qa code, .code { font-family: var(--mono); font-size: 13px; background: var(--wash); border-radius: 4px; padding: 1px 6px; color: var(--ink); }
+.qa .body strong { color: var(--ink); }
+.try { color: var(--ink); border-left: 3px solid var(--s1); padding-left: 10px; }
+
+@media (prefers-reduced-motion: no-preference) { .bar, .tr2 span { transition: width .25s ease, flex-grow .25s ease; } }
+
+/* ---- scrolling presentation ---- */
+.pnav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--plane); border-bottom: 1px solid var(--grid); display: flex; align-items: center; gap: 12px; margin-inline: calc(-1 * clamp(16px, 3vw, 32px)); padding-inline: clamp(16px, 3vw, 32px); }
+.navin { display: flex; gap: 2px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.navin::-webkit-scrollbar { display: none; }
+.navin a { padding: 12px 11px 10px; color: var(--ink2); text-decoration: none; white-space: nowrap; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; }
+.navin a:hover { color: var(--ink); background: var(--wash); }
+.navin a[aria-current="true"] { color: var(--ink); border-bottom-color: var(--s1); font-weight: 650; }
+.navctl { display: flex; align-items: center; gap: 10px; flex: none; }
+.count { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .count { display: none; } }
+.btn[aria-pressed="true"] { background: var(--wash); color: var(--ink); border-color: var(--ink2); font-weight: 650; }
+.btn.primary { background: var(--s1); border-color: var(--s1); color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .4; cursor: default; }
+
+section.part { padding-top: 64px; display: flex; flex-direction: column; gap: 20px; scroll-margin-top: 52px; }
+section.part:first-of-type { padding-top: 12px; }
+.eyebrow { margin: 0; color: var(--ink2); font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; font-weight: 650; }
+.phead { display: flex; flex-direction: column; gap: 8px; }
+.phead h2 { margin: 0; font-size: clamp(24px, 3.4vw, 32px); line-height: 1.15; font-weight: 650; text-wrap: balance; max-width: 36ch; }
+.lead { margin: 0; color: var(--ink2); font-size: 16.5px; max-width: 70ch; }
+header.top { padding-block: 28px 8px; }
+header.top h1 { font-size: clamp(34px, 6vw, 56px); letter-spacing: -.02em; line-height: 1.05; }
+header.top .lead { max-width: 64ch; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.cards.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) { .cards.two { grid-template-columns: minmax(0, 1fr); } }
+.cards.tight { gap: 12px; }
+.mini { border: 1px solid var(--ring); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); }
+.mini b { font-size: 14.5px; }
+.mini span { color: var(--ink2); font-size: 13.5px; }
+.mini.warn { border-top: 4px solid #fab219; }
+.mini.hl { border-color: var(--s1); background: var(--wash); }
+.card.accent { border-left: 3px solid var(--s1); }
+.card.warnc { border-left: 3px solid #fab219; }
+.callout { border: 1px solid var(--ring); border-left: 4px solid var(--s1); border-radius: 8px; background: var(--surface); padding: 14px 18px; font-size: 15.5px; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { border: 1px solid var(--axis); border-radius: 999px; padding: 3px 12px; font-size: 13.5px; color: var(--ink2); }
+.pill.mono, .pills .pill { font-family: var(--mono); font-size: 13px; }
+.big2 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 650; }
+.plain { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink2); }
+.plain b { color: var(--ink); }
+.note { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.mono-line { margin: 0; font-family: var(--mono); font-size: 13.5px; color: var(--ink); }
+.inline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.pipe { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+.stage { flex: 1 1 170px; border: 1px solid var(--ring); border-radius: 8px; padding: 12px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.stage .k { color: var(--muted); font-size: 12px; font-weight: 650; }
+.stage b { font-size: 15.5px; }
+.stage span:last-child { color: var(--ink2); font-size: 13.5px; }
+.stage.learned { border-color: var(--s1); background: color-mix(in srgb, var(--s1) 9%, var(--surface)); }
+.arr { align-self: center; width: 18px; height: 2px; background: var(--axis); position: relative; flex: none; }
+.arr::after { content: ""; position: absolute; right: -1px; top: -4px; border-left: 7px solid var(--axis); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+@media (max-width: 980px) { .arr { display: none; } }
+
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: s; color: var(--ink2); }
+.steps li { position: relative; padding-left: 38px; min-height: 26px; counter-increment: s; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--s1); color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.steps b { color: var(--ink); }
+
+.ratios { display: flex; gap: 12px; flex-wrap: wrap; }
+.ratio { flex: 1 1 180px; border: 1px solid var(--ring); border-radius: 8px; padding: 12px 16px; }
+.ratio.on { border-color: var(--s1); background: color-mix(in srgb, var(--s1) 9%, var(--surface)); }
+.ratio .v { font-size: 52px; font-weight: 700; line-height: 1.05; }
+.ratio .n { color: var(--ink2); font-size: 13.5px; }
+
+.diagram svg { width: 100%; max-width: 640px; height: auto; display: block; }
+.diagram .big-l { font-size: 28px; font-weight: 700; fill: var(--ink); font-family: var(--font); }
+.codeblock { background: var(--wash); border: 1px solid var(--ring); border-radius: 6px; padding: 14px 16px; overflow-x: auto; }
+.codeblock pre { margin: 0; font-family: var(--mono); font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.codeblock k { color: var(--ink2); font-style: normal; }
+.codeblock s { text-decoration: none; font-weight: 650; }
+
+.demo { display: flex; flex-direction: column; }
+.demo div { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 4px 16px; padding: 9px 0; border-bottom: 1px solid var(--grid); align-items: baseline; }
+.demo div:last-child { border-bottom: 0; }
+.demo span { color: var(--ink2); }
+@media (max-width: 640px) { .demo div { grid-template-columns: minmax(0, 1fr); } }
+
+details.say { border-left: 3px solid var(--axis); padding: 2px 0 2px 14px; }
+details.say > summary { cursor: pointer; color: var(--ink2); font-size: 13.5px; font-weight: 600; }
+details.say[open] > summary { color: var(--ink); }
+details.say ul { margin: 8px 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink2); max-width: 90ch; }
+
+.pager { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 12; display: flex; gap: 8px; }
+.pager .btn { background: var(--surface); box-shadow: 0 2px 10px rgba(0,0,0,.14); padding: 7px 14px; }
+.pager .btn.primary { background: var(--s1); }
+.wrap { padding-bottom: 96px; }
+
+/* ---- presentation cards: each slide is a full card, one idea per card ---- */
+html { scroll-snap-type: y proximity; scroll-padding-top: 54px; }
+.wrap { max-width: 1240px; }
+.pnav { position: sticky; }
+.prog { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: transparent; }
+.prog i { display: block; height: 2px; width: 0; background: var(--s1); transition: width .25s ease; }
+.slides { display: flex; flex-direction: column; gap: 28px; padding-top: 24px; }
+.slide { scroll-snap-align: start; scroll-margin-top: 54px; position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--ring); border-radius: 18px; padding: clamp(20px, 3.4vw, 52px); min-height: max(560px, calc(100svh - 112px)); display: flex; flex-direction: column; gap: 18px; font-size: 17px; min-width: 0; }
+.slide .shead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.slide .eyebrow { color: var(--ink2); }
+.snum { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slide h2 { margin: 0; font-size: clamp(28px, 3.9vw, 46px); line-height: 1.08; font-weight: 700; letter-spacing: -.018em; text-wrap: balance; max-width: 26ch; }
+.slide h3 { font-size: 18px; }
+.slide .sbody { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; min-width: 0; }
+.slide .lead { font-size: clamp(17px, 1.6vw, 20px); max-width: 64ch; }
+.slide .sub { font-size: 16px; }
+.slide .card { background: var(--plane); border-color: var(--ring); }
+.slide .tile { background: var(--plane); }
+.slide .callout { background: var(--plane); font-size: 17px; }
+.slide .plain { font-size: 17px; gap: 8px; }
+.slide .mini { background: var(--plane); }
+.slide details.say { margin-top: auto; }
+.slide .filters { background: var(--plane); }
+.slide .stage { background: var(--plane); }
+.slide .stage.learned { background: color-mix(in srgb, var(--s1) 9%, var(--plane)); }
+.slide .codeblock { background: var(--plane); }
+.slide .ratio { background: var(--plane); }
+.slide .cm .c { background: color-mix(in srgb, var(--s1) calc(var(--t) * 100%), var(--surface)); }
+.slide .cm .c.z { background: transparent; }
+.chartcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.chartcol h3 { margin: 0; }
+.tiles.big { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.tiles.big .tile { padding: 18px 20px; }
+.tiles.big .tile .v { font-size: clamp(30px, 4.4vw, 52px); line-height: 1.05; font-weight: 700; letter-spacing: -.01em; }
+.tiles.big .tile .k { font-size: 13px; }
+.tiles.big .tile .n { font-size: 14.5px; }
+.statement { margin: 0; font-size: clamp(20px, 2.4vw, 28px); line-height: 1.25; font-weight: 650; max-width: 36ch; text-wrap: balance; }
+.big3 { margin: 0; font-size: clamp(21px, 2.2vw, 28px); line-height: 1.15; font-weight: 700; }
+.kbd { font-family: var(--mono); font-size: 12.5px; border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; opacity: .85; }
+.hint { margin: 0; font-size: 14px; opacity: .8; }
+.flow { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; counter-reset: f; }
+.flow li { counter-increment: f; background: var(--plane); border: 1px solid var(--ring); border-radius: 10px; padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 6px; }
+.flow li::before { content: counter(f); font-size: 40px; font-weight: 700; line-height: 1; color: var(--s1); }
+.flow b { font-size: 18px; }
+.flow span { color: var(--ink2); font-size: 15.5px; }
+
+/* dark statement cards */
+.slide.dark { --surface: #12202B; --plane: #1B3040; --ink: #F6F5F0; --ink2: #B9C4CC; --muted: #8FA0AC; --ring: #2D4558; --grid: #2D4558; --axis: #3C566B; --wash: rgba(255,255,255,.06); background: #12202B; color: #F6F5F0; border-color: #12202B; color-scheme: dark; }
+.slide.dark .eyebrow { color: #5FD0C9; }
+.slide.dark .snum { color: #8FA0AC; }
+.slide.dark .card { background: #1B3040; border-color: #2D4558; }
+.slide.dark .statement { color: #F0B34A; }
+.slide.dark .lead, .slide.dark .sub { color: #B9C4CC; }
+.slide.dark details.say > summary { color: #B9C4CC; }
+.slide.dark details.say ul { color: #B9C4CC; }
+.slide.dark details.say { border-left-color: #3C566B; }
+.slide.dark .big3 { color: #F6F5F0; }
+
+.slide.cover { min-height: max(620px, calc(100svh - 112px)); }
+.slide.cover h1 { margin: 0; font-size: clamp(40px, 7vw, 84px); line-height: 1.02; letter-spacing: -.025em; font-weight: 700; max-width: 12ch; text-wrap: balance; }
+.slide.cover .sbody { justify-content: center; max-width: 640px; position: relative; z-index: 1; }
+.slide.cover .lead { color: #B9C4CC; font-size: clamp(18px, 2vw, 24px); }
+.slide.cover .meta { color: #B9C4CC; padding: 0; }
+.slide.cover .meta b { color: #F6F5F0; }
+.coverart { position: absolute; right: clamp(16px, 5vw, 80px); top: 50%; transform: translateY(-50%); width: min(40%, 480px); height: auto; opacity: .95; }
+@media (max-width: 860px) { .coverart { display: none; } }
+
+.trio { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+.trio .step { flex: 1 1 220px; background: #1B3040; border: 1px solid #2D4558; border-radius: 14px; padding: 22px 24px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.trio .step.on { border: 2px solid #5FD0C9; }
+.trio .lb { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; font-weight: 650; color: #B9C4CC; }
+.trio .n { font-size: clamp(56px, 9vw, 120px); line-height: 1; font-weight: 700; letter-spacing: -.03em; color: #F6F5F0; }
+.trio .n.dim { color: #B9C4CC; }
+.trio .n.acc { color: #5FD0C9; }
+.trio .d { font-size: 15.5px; color: #B9C4CC; }
+.trio .arrow { align-self: center; width: 30px; height: 18px; background: #5FD0C9; clip-path: polygon(0 35%, 60% 35%, 60% 0, 100% 50%, 60% 100%, 60% 65%, 0 65%); flex: none; }
+@media (max-width: 760px) { .trio .arrow { display: none; } }
+
+@media (max-width: 700px) { .slide { min-height: 0; border-radius: 14px; } html { scroll-snap-type: none; } }
+@media print { .pnav, .pager { display: none; } .slide { break-inside: avoid; } }
+</style>
+
+<div class="wrap">
+
+  <nav class="pnav" aria-label="Presentation sections">
+    <div class="navin" id="nav"></div>
+    <div class="navctl">
+      <span class="count" id="count" aria-live="polite"></span>
+    </div>
+    <div class="prog" aria-hidden="true"><i id="bar"></i></div>
+  </nav>
+
+  <main class="slides">
+
+  <!-- 1 COVER -->
+  <section class="slide dark cover" id="s-cover" data-group="Intro">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <div class="sbody">
+      <h1>State Diagram to Code</h1>
+      <p class="lead">A picture of a state-transition diagram goes in. A validated graph and tested Python code come out.</p>
+      <div class="meta">
+        <span><b>Detector</b> YOLO11n, 6 classes</span>
+        <span><b>Test split</b> 360 diagrams, 5,108 objects</span>
+        <span><b>Speed</b> 2.5 ms per image on a laptop GPU</span>
+      </div>
+    </div>
+    <svg class="coverart" viewBox="0 0 560 560" role="img" aria-label="A small state diagram: an initial arrow into state A, arrows from A to B, B to C and C back to A, with C drawn as a double-ring final state">
+      <g fill="none" stroke="#5FD0C9" stroke-width="5" stroke-linecap="round"><line x1="184" y1="140" x2="346" y2="140"/><line x1="409.9" y1="196.4" x2="324.2" y2="357.1"/><line x1="249.9" y1="383.6" x2="164.2" y2="222.9"/><line x1="20" y1="60" x2="48.1" y2="82.5"/></g>
+      <g fill="#5FD0C9"><polygon points="376,140 346,126 346,154"/><polygon points="310.1,383.6 336.5,363.7 311.9,350.5"/><polygon points="150.1,196.4 176.5,216.3 151.9,229.5"/><polygon points="70,100 40,92.7 56.2,72.3"/></g>
+      <g fill="#1B3040" stroke="#F6F5F0" stroke-width="5"><circle cx="120" cy="140" r="64"/><circle cx="440" cy="140" r="64"/><circle cx="280" cy="440" r="64"/></g>
+      <circle cx="280" cy="440" r="48" fill="none" stroke="#F6F5F0" stroke-width="5"/>
+    </svg>
+  </section>
+
+  <!-- 2 PROBLEM -->
+  <section class="slide" id="s-problem" data-group="Problem">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>A diagram is an image. Software needs a graph.</h2>
+    <div class="sbody">
+      <p class="lead">Protocol and interface state machines are drawn as pictures. Someone re-types them as code by hand, which is slow and easy to get wrong.</p>
+      <div class="cards">
+        <div class="card"><h3>States</h3><p class="sub">Find every state and read its name.</p></div>
+        <div class="card"><h3>Transitions</h3><p class="sub">Link each arrow to the right source, target and direction, even when edges cross, curve or loop back.</p></div>
+        <div class="card"><h3>Labels</h3><p class="sub">Split the text into event, guard and action.</p></div>
+        <div class="card"><h3>Start and end</h3><p class="sub">Identify the initial state and the final states.</p></div>
+      </div>
+      <div class="callout"><b>One wrong endpoint means code with wrong behaviour.</b> The goal is not to detect shapes. It is to rebuild the correct graph, and to say when the system is unsure.</div>
+    </div>
+  </section>
+
+  <!-- 3 PIPELINE -->
+  <section class="slide" id="s-pipeline" data-group="System">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Five stages take an image to tested code</h2>
+    <div class="sbody">
+      <div class="pipe" role="list">
+        <div class="stage" role="listitem"><span class="k">1</span><b>Image</b><span>Screenshot or photo of a diagram</span></div><span class="arr" aria-hidden="true"></span>
+        <div class="stage learned" role="listitem"><span class="k">2</span><b>YOLO11n</b><span>States, arrows, arrowheads, labels</span></div><span class="arr" aria-hidden="true"></span>
+        <div class="stage" role="listitem"><span class="k">3</span><b>Stroke tracing and OCR</b><span>Endpoints, direction, label text</span></div><span class="arr" aria-hidden="true"></span>
+        <div class="stage" role="listitem"><span class="k">4</span><b>Canonical JSON</b><span>Schema and graph validation</span></div><span class="arr" aria-hidden="true"></span>
+        <div class="stage" role="listitem"><span class="k">5</span><b>Code and tests</b><span>Generated, then verified in a sandbox</span></div>
+      </div>
+      <div class="keys"><span><i class="sq" style="--c:var(--s1)"></i>Learned (neural network)</span><span><i class="sq" style="--c:var(--axis)"></i>Deterministic (OpenCV, rules, tests)</span></div>
+      <div class="cards two">
+        <div class="card"><h3>Around the pipeline</h3><p class="sub">A web editor lets a person fix mistakes. Saved corrections become new training labels for the detector.</p></div>
+        <div class="card"><h3>Gemini, optional</h3><p class="sub">Explains the diagram and suggests corrections. It never decides: a person accepts or rejects each suggestion.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 PRINCIPLE (dark) -->
+  <section class="slide dark" id="s-principle" data-group="System">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Learned parts perceive. Deterministic parts reason.</h2>
+    <div class="sbody">
+      <div class="cards">
+        <div class="card"><h3>Neural network</h3><p class="big3">What is where</p><p class="sub">YOLO finds the objects as boxes.</p></div>
+        <div class="card"><h3>Classical vision</h3><p class="big3">What connects to what</p><p class="sub">OpenCV follows the pen strokes.</p></div>
+        <div class="card"><h3>Validators and tests</h3><p class="big3">Is it right</p><p class="sub">Schema, graph rules and a conformance plan.</p></div>
+      </div>
+      <p class="statement">Why not give the image to an LLM? Its answer cannot be verified or measured. These parts can.</p>
+    </div>
+  </section>
+
+  <!-- 5 YOLO -->
+  <section class="slide" id="s-yolo" data-group="Detection">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>YOLO11n finds the parts, but only as boxes</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="card"><h3>Six classes</h3>
+          <div class="pills"><span class="pill">state</span><span class="pill">arrow</span><span class="pill">final_state</span><span class="pill">arrowhead</span><span class="pill">initial_marker</span><span class="pill">label</span></div>
+          <p class="sub">A single-stage detector gives a box and a confidence for each object. The nano model is small and fast, and these line drawings need no bigger network. It starts from pretrained weights.</p></div>
+        <div class="card accent"><h3>The limitation</h3>
+          <p class="big2">A box shows where an arrow is, not where it starts, ends or points.</p>
+          <p class="sub">Boxes of crossing or curved arrows overlap and contain other objects. Connectivity needs the pixels of the stroke itself.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 DETECTOR TILES -->
+  <section class="slide" id="s-detector" data-group="Detection">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>The detector is nearly solved on this data</h2>
+    <div class="sbody">
+      <div class="tiles big" id="sumTiles"></div>
+      <p class="src">Source: Ultralytics validator run on dataset_v2 test images with runs/detect/v2/weights/best.pt, image size 640. Precision and recall are measured at the confidence that maximises F1.</p>
+      <div class="callout">That is why the interesting work is the next cards: turning boxes into a correct graph.</div>
+    </div>
+  </section>
+
+  <!-- 7 INK MASK -->
+  <section class="slide" id="s-ink" data-group="Strokes">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>First, a clean ink mask, even from a shadowed photo</h2>
+    <div class="sbody">
+      <ol class="flow">
+        <li><b>Estimate background</b><span>A large morphological closing removes thin lines and keeps paper shading.</span></li>
+        <li><b>Divide it out</b><span>Image divided by background flattens shadows and gradients.</span></li>
+        <li><b>Otsu threshold</b><span>The ink and paper cut-off is chosen from the histogram.</span></li>
+        <li><b>Remove speckle</b><span>A small morphological opening cleans up noise.</span></li>
+      </ol>
+      <p class="sub">The distance transform also gives the median pen width, so the tracer adapts to thick and thin lines.</p>
+    </div>
+  </section>
+
+  <!-- 8 TRACING -->
+  <section class="slide" id="s-tracing" data-group="Strokes">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Follow the pen, do not guess the nearest state</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="diagram">
+          <svg viewBox="0 0 640 400" role="img" aria-label="Two crossing arrows between four states A, B, C and D. The highlighted path from A to B passes straight through the crossing point.">
+            <line x1="110" y1="98" x2="500" y2="287" style="stroke:var(--s1);stroke-width:7;stroke-linecap:round"/>
+            <line x1="110" y1="302" x2="500" y2="113" style="stroke:var(--muted);stroke-width:6;stroke-linecap:round"/>
+            <polygon points="532,303 501.6,301.6 512,280" style="fill:var(--s1)"/>
+            <polygon points="532,97 512,120 501.6,98.4" style="fill:var(--muted)"/>
+            <circle cx="320" cy="200" r="12" style="fill:none;stroke:var(--s2);stroke-width:5"/>
+            <circle cx="70" cy="70" r="44" style="fill:var(--surface);stroke:var(--ink);stroke-width:4"/>
+            <circle cx="570" cy="330" r="44" style="fill:var(--surface);stroke:var(--ink);stroke-width:4"/>
+            <circle cx="70" cy="330" r="44" style="fill:var(--surface);stroke:var(--ink);stroke-width:4"/>
+            <circle cx="570" cy="70" r="44" style="fill:var(--surface);stroke:var(--ink);stroke-width:4"/>
+            <text x="70" y="80" text-anchor="middle" class="big-l">A</text><text x="570" y="340" text-anchor="middle" class="big-l">B</text>
+            <text x="70" y="340" text-anchor="middle" class="big-l">C</text><text x="570" y="80" text-anchor="middle" class="big-l">D</text>
+          </svg>
+          <p class="sub">A to B and C to D cross at the orange ring. The tracer keeps its heading, so each edge stays whole.</p>
+        </div>
+        <div>
+          <ol class="steps">
+            <li><b>Regions.</b> Remove each state from the mask, so arrows become free strokes.</li>
+            <li><b>Ports.</b> A port is where ink touches a thin ring around a state.</li>
+            <li><b>Trace.</b> Walk the stroke in 2 px steps. Turning is penalised, and gaps up to 14 px are bridged.</li>
+            <li><b>Stop.</b> Entering a state is an edge, returning to its own state is a self-loop, no ink is a free end.</li>
+          </ol>
+          <p class="sub" style="margin-top:14px">Every arrow is traced from both ends and the traces are cross-checked.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9 DIRECTION -->
+  <section class="slide" id="s-direction" data-group="Meaning">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>The arrowhead is the evidence for direction</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="ratios">
+          <div class="ratio"><div class="v">1.0</div><div class="n">Width ratio at a plain end of the shaft</div></div>
+          <div class="ratio on"><div class="v">2.2+</div><div class="n">Width ratio at an arrowhead (the head_ratio threshold)</div></div>
+        </div>
+        <ul class="plain">
+          <li><b>Primary:</b> a detected arrowhead box at the arrow's own end.</li>
+          <li><b>Fallback:</b> ink cross-section near each end divided by the shaft width. The wider end is the head.</li>
+          <li><b>Exclusive:</b> each arrowhead belongs to one arrow only.</li>
+          <li><b>Weak evidence:</b> direction becomes unknown and both readings are shown.</li></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 MEANING -->
+  <section class="slide" id="s-meaning" data-group="Meaning">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Start and end states, names and labels</h2>
+    <div class="sbody">
+      <div class="cards two">
+        <div class="card"><h3>Initial state</h3><p class="sub">A free-ended arrow whose head touches a state, or a detected initial-marker box next to it.</p></div>
+        <div class="card"><h3>Final state</h3><p class="sub">The final_state class, or a double ring found by sampling the radial ink profile at 90 angles.</p></div>
+        <div class="card"><h3>Reading text</h3><p class="sub">Tesseract on an upscaled crop with outline fragments removed first. Each label goes to the transition whose traced path is nearest.</p></div>
+        <div class="card"><h3>Label meaning</h3><p class="mono-line">timeout [retries&lt;3] / retransmit</p><p class="sub">Parsed into event, guard and action. Words like SYN, ACK or timeout mark a network event. Unknown words stay plain events.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 UNCERTAINTY -->
+  <section class="slide" id="s-uncertainty" data-group="Meaning">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>When unsure, the system says so</h2>
+    <div class="sbody">
+      <div class="cards">
+        <div class="card warnc"><h3>Unclear direction</h3><p class="sub">Both readings are listed. The edge is drawn amber and dashed.</p></div>
+        <div class="card warnc"><h3>Dangling arrow</h3><p class="sub">No transition is invented. A warning says a state may be missing.</p></div>
+        <div class="card warnc"><h3>Low OCR confidence</h3><p class="sub">Text under 0.6 confidence is flagged in the Issues tab for review.</p></div>
+      </div>
+      <p class="statement">Each uncertainty records the element, the field, the reason and the candidate readings.</p>
+    </div>
+  </section>
+
+  <!-- 12 JSON -->
+  <section class="slide" id="s-json" data-group="Code">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>One canonical JSON is the source of truth</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div>
+          <div class="codeblock" role="img" aria-label="Abridged JSON for the retry self-loop transition">
+<pre>{
+  <k>"id"</k>: <s>"T3"</s>,
+  <k>"source"</k>: <s>"S1"</s>, <k>"target"</k>: <s>"S1"</s>,
+  <k>"direction"</k>: <s>"loop"</s>,
+  <k>"event"</k>: <s>"timeout"</s>,
+  <k>"guard"</k>: <s>"retries&lt; 3"</s>,
+  <k>"action"</k>: <s>"retransmit"</s>,
+  <k>"kind"</k>: <s>"network_event"</s>
+}</pre></div>
+          <p class="src">Abridged: the retry self-loop on SYN_SENT from the TCP demo image.</p>
+        </div>
+        <div>
+          <h3>Schema 1.1, validated twice</h3>
+          <p class="sub">JSON Schema first, then graph rules:</p>
+          <ul class="plain"><li>No dangling references or duplicate ids</li><li>At most one initial state</li><li>No non-deterministic transitions</li><li>No transitions out of final states</li><li>No unreachable states</li></ul>
+          <p class="sub" style="margin-top:12px">The editor, validator, code generator and evaluation all read this one file.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 CONFORMANCE -->
+  <section class="slide" id="s-conformance" data-group="Code">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Generated code is checked against an independent reference</h2>
+    <div class="sbody">
+      <div class="cards">
+        <div class="card"><h3>A. Template generator</h3><p class="sub">A dependency-free StateMachine class. Guards are injected functions. Actions run before the state changes.</p></div>
+        <div class="card"><h3>B. Reference model</h3><p class="sub">A separate implementation of the same semantics, used as the oracle for what should happen.</p></div>
+        <div class="card accent"><h3>A must equal B</h3><p class="sub">The plan fires every transition plus guard-rejection and invalid-event probes. States and errors must match exactly.</p></div>
+      </div>
+      <div class="pills"><span class="pill">InvalidEventError</span><span class="pill">GuardRejectedError</span><span class="pill">TerminalStateError</span><span class="pill">NondeterministicTransitionError</span></div>
+      <div class="callout"><b>360 of 360</b> predicted graphs produced code that passed the full plan. Deliberately broken code is caught by mutation tests. Conformance shows the code matches the graph, not that the graph matches the drawing.</div>
+    </div>
+  </section>
+
+  <!-- 14 SANDBOX -->
+  <section class="slide" id="s-sandbox" data-group="Code">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Sandboxed execution, and a limited role for Gemini</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="card"><h3>Sandbox</h3>
+          <ul class="plain"><li>An AST allowlist rejects os, socket, subprocess, open, eval and exec before anything runs</li><li>Separate isolated interpreter, empty environment, temporary directory</li><li>Timeout plus CPU, memory, file-size and process limits</li><li>Audit hook blocks sockets, subprocesses, file writes and ctypes</li></ul>
+          <p class="note">Defence in depth for a local tool, not a container.</p></div>
+        <div class="card"><h3>Gemini (optional)</h3>
+          <ul class="plain"><li>Explains the diagram in plain language</li><li>Suggests corrections that you accept or reject</li><li>Can write alternative code, which must pass the same checks</li><li>Replies must match a JSON contract, and invented states are dropped</li></ul>
+          <p class="note">It never detects arrows, validates the graph or accepts code.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 DATA -->
+  <section class="slide" id="s-data" data-group="Data and scoring">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Synthetic diagrams with exact ground truth</h2>
+    <div class="sbody">
+      <div class="tiles big">
+        <div class="tile"><div class="k">Rendered diagrams</div><div class="v">2,400</div><div class="n">each with its true graph</div></div>
+        <div class="tile"><div class="k">Held-out test set</div><div class="v">360</div><div class="n">never used for training or tuning</div></div>
+        <div class="tile"><div class="k">Training</div><div class="v">60 epochs</div><div class="n">about 9 minutes on a laptop GPU</div></div>
+        <div class="tile"><div class="k">Validation mAP@50</div><div class="v">0.995</div><div class="n">final epoch, 360 validation images</div></div>
+      </div>
+      <ul class="plain">
+        <li><b>Split:</b> 1,680 train, 360 validation, 360 test. Seed 7.</li>
+        <li><b>Variety:</b> circle and rounded states, double-ring finals, curved, crossing and two-way edges, self-loops, blur, noise, JPEG.</li>
+        <li><b>No horizontal flip:</b> mirrored text never occurs in real diagrams.</li>
+        <li><b>Tuning:</b> tracer thresholds were tuned on the validation split only.</li></ul>
+    </div>
+  </section>
+
+  <!-- 16 SCORING -->
+  <section class="slide" id="s-scoring" data-group="Data and scoring">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>We score the whole graph, not just the boxes</h2>
+    <div class="sbody">
+      <div class="cards">
+        <div class="card"><h3>Match by geometry</h3><p class="sub">Predicted states are paired with true states by box overlap of at least 0.5, using the Hungarian algorithm. Never by id, because ids only record detection order.</p></div>
+        <div class="card"><h3>Strict graph checks</h3><p class="sub">Directed transition F1, endpoint accuracy, initial and final state accuracy, whole-graph exact match.</p></div>
+        <div class="card"><h3>Text error</h3><p class="sub">Exact match, and character error rate: edit distance divided by the true length. Zero is perfect.</p></div>
+      </div>
+      <div class="callout"><b>Three runs isolate each change.</b> A is the original pipeline. B adds the new tracing, OCR and label parsing on the old detector. C adds the retrained 6-class detector. All use the same 360 held-out diagrams.</div>
+    </div>
+  </section>
+
+  <!-- 17 PR CHARTS -->
+  <section class="slide" id="s-pr" data-group="Precision and recall">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Raise the threshold: precision up, recall down</h2>
+    <div class="sbody">
+      <div class="filters">
+        <div class="grp"><label>Classes</label><span id="chips" class="grp"></span></div>
+        <div class="grp"><label>Plot range</label>
+          <span class="seg" id="zoomSeg"><button data-z="1" aria-pressed="true">Zoom 0.8 to 1</button><button data-z="0" aria-pressed="false">Full 0 to 1</button></span></div>
+        <div class="grp"><label for="conf">Confidence</label>
+          <input type="range" id="conf" min="0.05" max="0.95" step="0.01" value="0.40" aria-label="Confidence threshold">
+          <span class="confval" id="confval">0.40</span>
+          <button class="btn" id="btnDefault">Pipeline default 0.40</button>
+          <button class="btn" id="btnBest">Best F1</button></div>
+      </div>
+      <div class="grid2">
+        <div class="chartcol">
+          <h3>Precision against recall</h3>
+          <p class="sub">Dots mark the chosen threshold. The area under a curve is that class's average precision.</p>
+          <div class="chart" id="prChart"></div>
+          <details class="tv"><summary>Table view</summary><div class="tscroll" id="prTable"></div></details>
+        </div>
+        <div class="chartcol">
+          <h3>Against confidence</h3>
+          <div class="inline"><label class="lbl" for="confClass">Class</label><select id="confClass"></select></div>
+          <div class="chart" id="confChart"></div>
+          <div class="keys"><span><i style="--c:var(--s1)"></i>Precision</span><span><i style="--c:var(--s2)"></i>Recall</span><span><i style="--c:var(--s3)"></i>F1</span></div>
+          <div class="readout" id="readout"></div>
+          <details class="tv"><summary>Table view</summary><div class="tscroll" id="confTable"></div></details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 OPERATING TABLE -->
+  <section class="slide" id="s-optable" data-group="Precision and recall">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Every class at the chosen threshold</h2>
+    <div class="sbody">
+      <p class="lead">Threshold <span class="confval" id="confval2">0.40</span>. The row with the lowest recall is shaded.</p>
+      <div class="tscroll" id="opTable"></div>
+      <p class="src">Source: precision-confidence, recall-confidence and F1-confidence curves from the validator run on the test split, sampled every 0.01.</p>
+    </div>
+  </section>
+
+  <!-- 19 AP -->
+  <section class="slide" id="s-ap" data-group="Classes">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Arrowheads are the hard class</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="chartcol">
+          <div class="keys"><span><i class="sq" style="--c:var(--s1)"></i>AP@50</span><span><i class="sq" style="--c:var(--s2)"></i>AP@50-95</span></div>
+          <div id="apBars"></div>
+        </div>
+        <div class="chartcol">
+          <div class="tscroll" id="clsTable"></div>
+          <p class="sub">AP@50 counts a box as correct at 50% overlap. AP@50-95 averages ten stricter levels up to 95%, so it punishes small boxes that are a few pixels off.</p>
+          <p class="src">Source: Ultralytics validator, test split. Precision and recall at the best-F1 confidence.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20 CONFUSION -->
+  <section class="slide" id="s-confusion" data-group="Classes">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>The confusion matrix is nearly diagonal</h2>
+    <div class="sbody">
+      <div class="inline"><label class="lbl">Show</label><span class="seg" id="cmSeg"><button data-e="0" aria-pressed="true">All cells</button><button data-e="1" aria-pressed="false">Errors only</button></span></div>
+      <div class="cmwrap"><div class="cm" id="cm" role="table" aria-label="Confusion matrix"></div></div>
+      <p class="sub">Rows are the true class, columns are what the detector said. Each cell is a count, shaded by its share of that row's true objects. <b>Missed</b> means no detection overlapped the object.</p>
+      <p class="src">Source: Ultralytics confusion matrix, test split, validator default overlap of 0.45. Detections with no matching label (false positives) are left out.</p>
+    </div>
+  </section>
+
+  <!-- 21 TRAINING CURVES -->
+  <section class="slide" id="s-training" data-group="Training">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Training converged without overfitting</h2>
+    <div class="sbody">
+      <div class="filters">
+        <div class="grp"><label>Model</label><span class="seg" id="modelSeg"><button data-m="v2" aria-pressed="true">New model, 6 classes</button><button data-m="v1" aria-pressed="false">Original, 2 classes</button></span></div>
+        <div class="grp"><label>Metric range</label><span class="seg" id="tzSeg"><button data-z="0" aria-pressed="true">Full 0 to 1</button><button data-z="1" aria-pressed="false">Zoom 0.9 to 1</button></span></div>
+      </div>
+      <div class="grid2">
+        <div class="chartcol">
+          <h3>Validation metrics per epoch</h3>
+          <div class="chart" id="trMetrics"></div>
+          <div class="keys"><span><i style="--c:var(--s1)"></i>Precision</span><span><i style="--c:var(--s2)"></i>Recall</span><span><i style="--c:var(--s3)"></i>mAP@50</span><span><i style="--c:var(--s4)"></i>mAP@50-95</span></div>
+          <p class="src" id="trSrc1"></p>
+        </div>
+        <div class="chartcol">
+          <h3>Loss, training against validation</h3>
+          <div class="inline"><label class="lbl">Loss</label><span class="seg" id="lossSeg"><button data-l="box" aria-pressed="true">Box</button><button data-l="cls" aria-pressed="false">Class</button><button data-l="dfl" aria-pressed="false">Distribution focal</button></span></div>
+          <div class="chart" id="trLoss"></div>
+          <div class="keys"><span><i style="--c:var(--s1)"></i>Training</span><span><i style="--c:var(--s2)"></i>Validation</span></div>
+          <p class="src" id="trSrc2"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22 RUN SUMMARY -->
+  <section class="slide" id="s-runsummary" data-group="Training">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Run summary</h2>
+    <div class="sbody">
+      <div class="tscroll" id="trTable"></div>
+      <p class="sub" id="trNote"></p>
+      <p class="src">The two models ran on different machines, so their training times are not comparable.</p>
+    </div>
+  </section>
+
+  <!-- 23 DVG -->
+  <section class="slide" id="s-dvg" data-group="Graph results">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Detector accuracy is not graph accuracy</h2>
+    <div class="sbody">
+      <p class="lead">Pipelines A and B use the same original detector. C uses the retrained one. Detection scores barely move, while the share of correctly rebuilt transitions changes almost threefold.</p>
+      <div class="keys"><span><i class="sq" style="--c:var(--s1)"></i>Detector mAP@50</span><span><i class="sq" style="--c:var(--s2)"></i>Transition F1 after linking arrows to states</span></div>
+      <div id="dvg"></div>
+      <p class="src">Source: A and B detector mAP@50 from the original model's final validation epoch (2 classes, its own validation set). C from the test split (6 classes). The sets differ, so compare the pattern, not the third decimal. Transition F1 from outputs/eval_*.json.</p>
+    </div>
+  </section>
+
+  <!-- 24 HEADLINE (dark) -->
+  <section class="slide dark" id="s-headline" data-group="Graph results">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Transition F1 on 360 held-out diagrams</h2>
+    <div class="sbody">
+      <div class="trio">
+        <div class="step"><span class="lb">A · Original</span><span class="n dim">0.32</span><span class="d">Nearest-centre linking, 2 classes</span></div>
+        <span class="arrow" aria-hidden="true"></span>
+        <div class="step"><span class="lb">B · Stroke tracing</span><span class="n">0.59</span><span class="d">Plus tracing, OCR and semantics, same detector</span></div>
+        <span class="arrow" aria-hidden="true"></span>
+        <div class="step on"><span class="lb">C · Retrained</span><span class="n acc">0.93</span><span class="d">Plus the retrained 6-class detector</span></div>
+      </div>
+      <p class="statement">Algorithm change: +0.27. Better detector: +0.34. Both matter.</p>
+    </div>
+  </section>
+
+  <!-- 25 STACK -->
+  <section class="slide" id="s-stack" data-group="Graph results">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Where the transitions went</h2>
+    <div class="sbody">
+      <div class="inline"><label class="lbl">View</label><span class="seg" id="stackSeg"><button data-v="recall" aria-pressed="true">Of the true transitions (recall)</button><button data-v="precision" aria-pressed="false">Of the predicted transitions (precision)</button></span></div>
+      <div class="keys" id="stackKeys"></div>
+      <div class="stack" id="stack"></div>
+      <p class="src">Source: counts in outputs/eval_*.json. A transition is correct only with the right pair of states and the right direction. Reversed means the right pair, wrong direction.</p>
+    </div>
+  </section>
+
+  <!-- 26 CALCULATOR -->
+  <section class="slide" id="s-calc" data-group="Graph results">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Precision and recall by hand</h2>
+    <div class="sbody">
+      <div class="inline"><label class="lbl">Pipeline</label><span class="seg" id="calcSeg"><button data-p="A" aria-pressed="false">A original</button><button data-p="B" aria-pressed="false">B new linking</button><button data-p="C" aria-pressed="true">C new linking, new detector</button></span></div>
+      <div class="calc" id="calc"></div>
+    </div>
+  </section>
+
+  <!-- 27 METRIC TABLE -->
+  <section class="slide" id="s-metrics" data-group="Graph results">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Structure is strong, text is the weak spot</h2>
+    <div class="sbody">
+      <div class="keys"><span><i class="sq" style="--c:var(--pa)"></i>A original</span><span><i class="sq" style="--c:var(--pb)"></i>B new linking</span><span><i class="sq" style="--c:var(--s1)"></i>C new linking, new detector</span></div>
+      <div class="tscroll" id="metTable"></div>
+      <p class="src">Source: outputs/eval_A_original_pipeline_v1_model.json, eval_B_new_pipeline_v1_model.json, eval_C_new_pipeline_v2_model.json. 360 test diagrams each. Error-rate rows (CER) are better when lower.</p>
+    </div>
+  </section>
+
+  <!-- 28 EDITOR -->
+  <section class="slide" id="s-editor" data-group="Editor">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>A web editor, and a loop that learns from fixes</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="card"><h3>Editor</h3>
+          <ul class="plain"><li>Detections shown over the image, next to the rebuilt graph</li><li>Drag states, add transitions, reverse direction, undo and redo</li><li>Uncertain items are amber and dashed, and the Issues tab lists them</li><li>Edits to the JSON are validated before they are accepted</li><li>The Code tab marks generated code stale after any change</li></ul></div>
+        <div class="card"><h3>Correction loop</h3>
+          <ol class="steps"><li>Predict and review the graph</li><li>Fix it and click Save correction</li><li>Export corrections as YOLO labels</li><li>Fine-tune the detector</li><li>Measure on held-out corrections that were never trained on</li></ol></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 29 LIMITS -->
+  <section class="slide" id="s-limits" data-group="Wrap-up">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>What the numbers do not claim</h2>
+    <div class="sbody">
+      <div class="cards two">
+        <div class="card warnc"><h3>Synthetic data only</h3><p class="sub">Photos and handwriting are out of distribution. No real corrections have been trained on yet.</p></div>
+        <div class="card warnc"><h3>Label OCR is the weakest stage</h3><p class="sub">65 percent of labels are read exactly. A misread guard changes behaviour, so review guards.</p></div>
+        <div class="card warnc"><h3>Hard association cases</h3><p class="sub">Shallow crossings, arrows under text and tiny self-loops. Flagged when detected, not always.</p></div>
+        <div class="card warnc"><h3>Scope of verification</h3><p class="sub">Only Python is executed and checked. The sandbox is process isolation, not a container.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 30 OURS -->
+  <section class="slide" id="s-ours" data-group="Wrap-up">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>What we used and what we built</h2>
+    <div class="sbody">
+      <div class="grid2">
+        <div class="card"><h3>Used off the shelf</h3><ul class="plain"><li>YOLO11n from Ultralytics</li><li>Tesseract OCR</li><li>OpenCV and SciPy primitives</li><li>Gemini API (optional)</li></ul></div>
+        <div class="card accent"><h3>Built by us</h3><ul class="plain"><li>Synthetic diagram generator with exact ground truth</li><li>Stroke-tracing association and arrowhead direction logic</li><li>Canonical schema, validator and label parser</li><li>Code generator, reference model and sandboxed conformance tests</li><li>Evaluation framework, threshold tuner, editor and correction loop</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 31 DEMO -->
+  <section class="slide" id="s-demo" data-group="Wrap-up">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Live demo, about ten minutes</h2>
+    <div class="sbody">
+      <div class="demo">
+        <div><code class="code">tcp_handshake.png</code><span>Network events, guard, action, retry self-loop, initial and final state</span></div>
+        <div><code class="code">crossing_edges.png</code><span>Crossing arrows are not confused</span></div>
+        <div><code class="code">arrow_without_head.png</code><span>Unclear direction becomes an amber warning, not a guess</span></div>
+        <div><code class="code">Code tab: Generate and verify</code><span>Edit the graph, see the stale badge, regenerate, tests pass</span></div>
+        <div><code class="code">net_01_photo.jpg</code><span>A photo-like image shows the honest limit: names can be misread</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 32 Q&A -->
+  <section class="slide" id="s-qa" data-group="Questions">
+    <div class="shead"><span class="eyebrow"></span><span class="snum"></span></div>
+    <h2>Questions and answers</h2>
+    <div class="sbody" style="justify-content:flex-start">
+      <div class="qa" id="qa"></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<div class="pager" role="group" aria-label="Move between cards">
+  <button class="btn" id="prev" aria-label="Previous card">Prev</button>
+  <button class="btn primary" id="next" aria-label="Next card">Next</button>
+</div>
+<div class="tip" id="tip" hidden role="tooltip"></div>
+
+<script>
+const D = {"det":{"names":["state","arrow","final_state","arrowhead","initial_marker","label"],"curve_titles":["Precision-Recall(B)","F1-Confidence(B)","Precision-Confidence(B)","Recall-Confidence(B)"],"n_images":360,"per_class":[{"name":"state","precision":0.9996715934013565,"recall":1.0,"ap50":0.995,"ap5095":0.9949999999999999,"instances":1128},{"name":"arrow","precision":0.9908564846035142,"recall":0.9842271293375394,"ap50":0.9940206738323946,"ap5095":0.9494812700104565,"instances":1268},{"name":"final_state","precision":0.9975980073476405,"recall":1.0,"ap50":0.995,"ap5095":0.9949999999999999,"instances":154},{"name":"arrowhead","precision":0.9863371650856889,"recall":0.9678639145209342,"ap50":0.9817911457276458,"ap5095":0.8320702369066778,"instances":1268},{"name":"initial_marker","precision":0.9920355623807071,"recall":0.9722222222222222,"ap50":0.9927803936352135,"ap5095":0.9348058189377821,"instances":360},{"name":"label","precision":0.9978528249447288,"recall":0.9994157967428289,"ap50":0.995,"ap5095":0.8969895697582675,"instances":930}],"overall":{"precision":0.9940586062939393,"recall":0.9872881771372541,"map50":0.9922653688658757,"map5095":0.9338911492688641},"curves":[{"xlabel":"Recall","ylabel":"Precision","x":[0.0,0.009,0.019,0.029,0.039,0.049,0.0591,0.0691,0.0791,0.0891,0.0991,0.1091,0.1191,0.1291,0.1391,0.1491,0.1592,0.1692,0.1792,0.1892,0.1992,0.2092,0.2192,0.2292,0.2392,0.2492,0.2593,0.2693,0.2793,0.2893,0.2993,0.3093,0.3193,0.3293,0.3393,0.3493,0.3594,0.3694,0.3794,0.3894,0.3994,0.4094,0.4194,0.4294,0.4394,0.4494,0.4595,0.4695,0.4795,0.4895,0.4995,0.5095,0.5195,0.5295,0.5395,0.5495,0.5596,0.5696,0.5796,0.5896,0.5996,0.6096,0.6196,0.6296,0.6396,0.6496,0.6597,0.6697,0.6797,0.6897,0.6997,0.7097,0.7197,0.7297,0.7397,0.7497,0.7598,0.7698,0.7798,0.7898,0.7998,0.8098,0.8198,0.8298,0.8398,0.8498,0.8599,0.8699,0.8799,0.8899,0.8999,0.9099,0.9199,0.9299,0.9399,0.9499,0.96,0.97,0.98,0.99,1.0],"y":[[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9991,0.9983,0.9983,0.9967,0.9967,0.9967,0.9967,0.9967,0.9943,0.9943,0.9928,0.9699,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9979,0.9969,0.9969,0.9954,0.9954,0.9954,0.9954,0.9954,0.9954,0.9954,0.9954,0.9948,0.9948,0.9948,0.9948,0.9948,0.9948,0.9943,0.9943,0.9943,0.9943,0.9911,0.9856,0.941,0.0,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9943,0.9806,0.9203,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.0]]},{"xlabel":"Confidence","ylabel":"F1","x":[0.0,0.009,0.019,0.029,0.039,0.049,0.0591,0.0691,0.0791,0.0891,0.0991,0.1091,0.1191,0.1291,0.1391,0.1491,0.1592,0.1692,0.1792,0.1892,0.1992,0.2092,0.2192,0.2292,0.2392,0.2492,0.2593,0.2693,0.2793,0.2893,0.2993,0.3093,0.3193,0.3293,0.3393,0.3493,0.3594,0.3694,0.3794,0.3894,0.3994,0.4094,0.4194,0.4294,0.4394,0.4494,0.4595,0.4695,0.4795,0.4895,0.4995,0.5095,0.5195,0.5295,0.5395,0.5495,0.5596,0.5696,0.5796,0.5896,0.5996,0.6096,0.6196,0.6296,0.6396,0.6496,0.6597,0.6697,0.6797,0.6897,0.6997,0.7097,0.7197,0.7297,0.7397,0.7497,0.7598,0.7698,0.7798,0.7898,0.7998,0.8098,0.8198,0.8298,0.8398,0.8498,0.8599,0.8699,0.8799,0.8899,0.8999,0.9099,0.9199,0.9299,0.9399,0.9499,0.96,0.97,0.98,0.99,1.0],"y":[[0.9956,0.9994,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9892,0.3732,0.0,0.0,0.0],[0.7738,0.8952,0.9199,0.9312,0.9361,0.9415,0.9427,0.9458,0.949,0.9519,0.9536,0.9564,0.958,0.9599,0.9623,0.9629,0.9633,0.9655,0.9677,0.9693,0.9704,0.9715,0.9719,0.973,0.9733,0.9746,0.9759,0.9774,0.9782,0.9785,0.9784,0.9788,0.9796,0.9794,0.9795,0.98,0.9802,0.9806,0.981,0.9814,0.9817,0.9819,0.9816,0.9823,0.983,0.9827,0.9828,0.9829,0.9831,0.9847,0.9851,0.9857,0.9861,0.9859,0.986,0.9861,0.9861,0.9866,0.9868,0.9869,0.987,0.9875,0.9872,0.987,0.9874,0.9871,0.9863,0.9859,0.9841,0.9831,0.9826,0.9823,0.982,0.9806,0.9781,0.9763,0.975,0.9752,0.974,0.9722,0.9693,0.9655,0.9623,0.9587,0.953,0.9474,0.9405,0.9339,0.9211,0.9049,0.8805,0.8542,0.8159,0.7622,0.6366,0.447,0.2079,0.0277,0.0,0.0,0.0],[0.9968,0.9968,0.9968,0.9969,0.9969,0.9969,0.997,0.997,0.997,0.9971,0.9971,0.9971,0.9972,0.9972,0.9972,0.9973,0.9973,0.9973,0.9974,0.9974,0.9974,0.9975,0.9975,0.9975,0.9976,0.9976,0.9976,0.9977,0.9977,0.9977,0.9978,0.9978,0.9978,0.9979,0.9979,0.9979,0.998,0.998,0.998,0.9981,0.9981,0.9981,0.9982,0.9982,0.9982,0.9983,0.9983,0.9983,0.9984,0.9984,0.9984,0.9985,0.9985,0.9985,0.9986,0.9986,0.9986,0.9987,0.9987,0.9988,0.9988,0.9988,0.9989,0.9989,0.9989,0.999,0.999,0.999,0.9991,0.9991,0.9991,0.9992,0.9992,0.9992,0.9993,0.9993,0.9993,0.9994,0.9994,0.9994,0.9995,0.9995,0.9995,0.9996,0.9996,0.9996,0.9997,0.9997,0.9997,0.9998,0.9998,0.9998,0.9999,0.9999,0.9999,1.0,1.0,0.8788,0.0613,0.0,0.0],[0.8037,0.9089,0.9295,0.9377,0.942,0.9482,0.9501,0.9526,0.9561,0.9583,0.9599,0.9599,0.9608,0.9617,0.9625,0.9627,0.9632,0.9647,0.9657,0.9659,0.9666,0.9672,0.9687,0.9692,0.9695,0.9704,0.9704,0.9704,0.9705,0.9702,0.9705,0.9709,0.9712,0.972,0.9721,0.9719,0.9717,0.9719,0.9721,0.9726,0.9738,0.9739,0.9736,0.9732,0.9735,0.9733,0.9743,0.9754,0.9756,0.9759,0.9763,0.9764,0.9765,0.977,0.9772,0.9772,0.9775,0.9778,0.9776,0.9775,0.9772,0.9774,0.9779,0.9781,0.977,0.9764,0.9763,0.9758,0.9759,0.9749,0.9746,0.9742,0.9741,0.9739,0.9733,0.972,0.9707,0.97,0.9683,0.9657,0.9618,0.9591,0.9525,0.9424,0.931,0.9113,0.8833,0.8371,0.7231,0.5465,0.3187,0.112,0.0234,0.0072,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[0.7214,0.9256,0.951,0.9542,0.9597,0.962,0.964,0.965,0.9719,0.9751,0.9742,0.9753,0.9756,0.976,0.9764,0.9771,0.9791,0.9786,0.9779,0.9787,0.9793,0.9797,0.9801,0.9805,0.9792,0.9792,0.9793,0.9794,0.9795,0.9796,0.9797,0.9797,0.9798,0.9799,0.98,0.9801,0.9801,0.9802,0.9803,0.9804,0.9805,0.9807,0.9809,0.9812,0.9815,0.9817,0.982,0.9822,0.9824,0.9826,0.9828,0.9831,0.9832,0.9827,0.9823,0.9818,0.9822,0.9827,0.9831,0.9824,0.9819,0.9822,0.9826,0.9829,0.983,0.9824,0.9818,0.982,0.9823,0.9826,0.9829,0.9812,0.9803,0.98,0.9798,0.9796,0.9794,0.9792,0.9789,0.9781,0.9754,0.9747,0.9726,0.9718,0.9701,0.9678,0.9632,0.9554,0.9465,0.9327,0.9057,0.8355,0.7285,0.5723,0.3741,0.1022,0.0102,0.0,0.0,0.0,0.0],[0.948,0.9907,0.9936,0.9958,0.9962,0.9964,0.9965,0.9966,0.9967,0.9968,0.997,0.9971,0.9972,0.9978,0.9979,0.998,0.9981,0.9982,0.9983,0.9983,0.9984,0.9984,0.9984,0.9984,0.9984,0.9985,0.9985,0.9985,0.9985,0.9985,0.9985,0.9985,0.9986,0.9986,0.9986,0.9986,0.9986,0.9986,0.9986,0.9987,0.9987,0.9987,0.9987,0.9987,0.9987,0.9987,0.9987,0.9988,0.9988,0.9988,0.9988,0.9988,0.9988,0.9988,0.9989,0.9989,0.9989,0.9989,0.9989,0.9989,0.9988,0.9985,0.9985,0.9985,0.9986,0.9987,0.9988,0.9989,0.9989,0.9987,0.9986,0.9985,0.9984,0.9985,0.9985,0.9986,0.9987,0.9988,0.9989,0.9988,0.998,0.9966,0.9961,0.9949,0.9923,0.9859,0.9747,0.9551,0.8974,0.7865,0.5902,0.2903,0.069,0.0037,0.0,0.0,0.0,0.0,0.0,0.0,0.0]]},{"xlabel":"Confidence","ylabel":"Precision","x":[0.0,0.009,0.019,0.029,0.039,0.049,0.0591,0.0691,0.0791,0.0891,0.0991,0.1091,0.1191,0.1291,0.1391,0.1491,0.1592,0.1692,0.1792,0.1892,0.1992,0.2092,0.2192,0.2292,0.2392,0.2492,0.2593,0.2693,0.2793,0.2893,0.2993,0.3093,0.3193,0.3293,0.3393,0.3493,0.3594,0.3694,0.3794,0.3894,0.3994,0.4094,0.4194,0.4294,0.4394,0.4494,0.4595,0.4695,0.4795,0.4895,0.4995,0.5095,0.5195,0.5295,0.5395,0.5495,0.5596,0.5696,0.5796,0.5896,0.5996,0.6096,0.6196,0.6296,0.6396,0.6496,0.6597,0.6697,0.6797,0.6897,0.6997,0.7097,0.7197,0.7297,0.7397,0.7497,0.7598,0.7698,0.7798,0.7898,0.7998,0.8098,0.8198,0.8298,0.8398,0.8498,0.8599,0.8699,0.8799,0.8899,0.8999,0.9099,0.9199,0.9299,0.9399,0.9499,0.96,0.97,0.98,0.99,1.0],"y":[[0.9912,0.9988,0.9991,0.9991,0.9991,0.9991,0.9992,0.9992,0.9992,0.9992,0.9992,0.9992,0.9992,0.9992,0.9992,0.9992,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9993,0.9994,0.9994,0.9994,0.9994,0.9994,0.9994,0.9994,0.9994,0.9994,0.9994,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9995,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9996,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9997,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9998,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,0.9999,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],[0.6323,0.8123,0.8539,0.8736,0.8823,0.892,0.8947,0.9003,0.9063,0.9115,0.9147,0.9199,0.9227,0.9263,0.9308,0.9319,0.9333,0.9374,0.9416,0.9454,0.9475,0.9504,0.951,0.9532,0.9536,0.9563,0.9587,0.9617,0.9631,0.964,0.965,0.9658,0.9674,0.9677,0.9688,0.9699,0.9707,0.9717,0.9724,0.9731,0.9738,0.9741,0.9744,0.9764,0.9778,0.9781,0.9789,0.9792,0.9796,0.9828,0.9835,0.9848,0.9858,0.9859,0.9863,0.9866,0.9871,0.9882,0.9885,0.9888,0.9898,0.9913,0.9913,0.9913,0.9923,0.9928,0.9928,0.9928,0.9928,0.9928,0.9928,0.9932,0.9943,0.9943,0.9943,0.9951,0.9951,0.9967,0.9967,0.9967,0.9967,0.9966,0.9966,0.9966,0.9966,0.9983,0.9982,0.9991,0.9991,0.999,0.999,0.9989,0.9989,0.9987,1.0,1.0,1.0,1.0,1.0,1.0,1.0],[0.9935,0.9936,0.9937,0.9937,0.9938,0.9939,0.9939,0.994,0.9941,0.9941,0.9942,0.9943,0.9943,0.9944,0.9945,0.9945,0.9946,0.9947,0.9947,0.9948,0.9949,0.9949,0.995,0.9951,0.9951,0.9952,0.9953,0.9954,0.9954,0.9955,0.9956,0.9956,0.9957,0.9958,0.9958,0.9959,0.996,0.996,0.9961,0.9962,0.9962,0.9963,0.9964,0.9964,0.9965,0.9966,0.9966,0.9967,0.9968,0.9968,0.9969,0.997,0.997,0.9971,0.9972,0.9972,0.9973,0.9974,0.9974,0.9975,0.9976,0.9976,0.9977,0.9978,0.9978,0.9979,0.998,0.998,0.9981,0.9982,0.9982,0.9983,0.9984,0.9984,0.9985,0.9986,0.9986,0.9987,0.9988,0.9988,0.9989,0.999,0.9991,0.9991,0.9992,0.9993,0.9993,0.9994,0.9995,0.9995,0.9996,0.9997,0.9997,0.9998,0.9999,0.9999,1.0,1.0,1.0,1.0,1.0],[0.678,0.8437,0.8805,0.8979,0.9059,0.9174,0.921,0.9257,0.9324,0.9372,0.9404,0.9417,0.9436,0.9453,0.9467,0.9471,0.9483,0.9512,0.9529,0.9542,0.9556,0.9567,0.9596,0.9607,0.9612,0.963,0.9635,0.9637,0.964,0.9642,0.9647,0.9655,0.9661,0.9679,0.9687,0.9687,0.9687,0.969,0.9694,0.9704,0.9728,0.9732,0.9732,0.9733,0.9739,0.9742,0.9762,0.9784,0.9797,0.9802,0.981,0.9812,0.9815,0.9825,0.9829,0.9832,0.9843,0.985,0.9856,0.9858,0.9863,0.9874,0.9883,0.9895,0.9895,0.9895,0.9903,0.9903,0.9911,0.991,0.9918,0.9933,0.9934,0.9935,0.9942,0.9942,0.9942,0.9942,0.9942,0.9942,0.9941,0.9941,0.994,0.9947,0.9946,0.9953,0.9951,0.9978,0.9972,0.9958,0.9918,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],[0.5643,0.8635,0.9112,0.9219,0.9322,0.9365,0.9403,0.9422,0.9555,0.9621,0.9653,0.9673,0.968,0.9688,0.9695,0.971,0.9749,0.9752,0.9751,0.9768,0.9781,0.9789,0.9797,0.9804,0.9806,0.9807,0.9809,0.981,0.9812,0.9814,0.9815,0.9817,0.9819,0.982,0.9822,0.9824,0.9825,0.9827,0.9828,0.983,0.9832,0.9835,0.9841,0.9846,0.9852,0.9857,0.9862,0.9866,0.9871,0.9875,0.9879,0.9884,0.9888,0.9888,0.9887,0.9887,0.9896,0.9905,0.9914,0.9915,0.9918,0.9924,0.9931,0.9938,0.9943,0.9943,0.9943,0.9949,0.9955,0.9962,0.9968,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.9971,0.997,0.997,0.9969,0.9968,0.9967,0.9962,0.9952,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0],[0.9012,0.9815,0.9873,0.9916,0.9925,0.9928,0.993,0.9932,0.9935,0.9937,0.994,0.9942,0.9945,0.9957,0.9959,0.996,0.9962,0.9964,0.9965,0.9967,0.9968,0.9968,0.9968,0.9969,0.9969,0.9969,0.997,0.997,0.997,0.997,0.9971,0.9971,0.9971,0.9971,0.9972,0.9972,0.9972,0.9973,0.9973,0.9973,0.9973,0.9974,0.9974,0.9974,0.9974,0.9975,0.9975,0.9975,0.9975,0.9976,0.9976,0.9976,0.9977,0.9977,0.9977,0.9977,0.9978,0.9978,0.9978,0.9978,0.9979,0.9979,0.998,0.9982,0.9983,0.9985,0.9987,0.9988,0.9989,0.9989,0.9989,0.9989,0.9989,0.9991,0.9992,0.9994,0.9995,0.9997,0.9999,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0]]},{"xlabel":"Confidence","ylabel":"Recall","x":[0.0,0.009,0.019,0.029,0.039,0.049,0.0591,0.0691,0.0791,0.0891,0.0991,0.1091,0.1191,0.1291,0.1391,0.1491,0.1592,0.1692,0.1792,0.1892,0.1992,0.2092,0.2192,0.2292,0.2392,0.2492,0.2593,0.2693,0.2793,0.2893,0.2993,0.3093,0.3193,0.3293,0.3393,0.3493,0.3594,0.3694,0.3794,0.3894,0.3994,0.4094,0.4194,0.4294,0.4394,0.4494,0.4595,0.4695,0.4795,0.4895,0.4995,0.5095,0.5195,0.5295,0.5395,0.5495,0.5596,0.5696,0.5796,0.5896,0.5996,0.6096,0.6196,0.6296,0.6396,0.6496,0.6597,0.6697,0.6797,0.6897,0.6997,0.7097,0.7197,0.7297,0.7397,0.7497,0.7598,0.7698,0.7798,0.7898,0.7998,0.8098,0.8198,0.8298,0.8398,0.8498,0.8599,0.8699,0.8799,0.8899,0.8999,0.9099,0.9199,0.9299,0.9399,0.9499,0.96,0.97,0.98,0.99,1.0],"y":[[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9786,0.2294,0.0,0.0,0.0],[0.9968,0.9968,0.9968,0.9968,0.9968,0.9967,0.9961,0.9961,0.9961,0.9961,0.9961,0.9961,0.9961,0.9961,0.9961,0.9961,0.9953,0.9953,0.9953,0.9945,0.9945,0.9937,0.9937,0.9937,0.9937,0.9937,0.9937,0.9937,0.9937,0.9934,0.9921,0.9921,0.9921,0.9915,0.9905,0.9903,0.9897,0.9897,0.9897,0.9897,0.9897,0.9897,0.989,0.9882,0.9882,0.9874,0.9869,0.9866,0.9866,0.9866,0.9866,0.9866,0.9863,0.9858,0.9858,0.9857,0.985,0.985,0.985,0.985,0.9842,0.9837,0.9831,0.9828,0.9826,0.9815,0.9798,0.9791,0.9756,0.9736,0.9726,0.9716,0.9699,0.9673,0.9624,0.9582,0.9557,0.9546,0.9522,0.9489,0.9435,0.9363,0.9303,0.9236,0.913,0.9016,0.8891,0.8767,0.8544,0.827,0.7872,0.7461,0.6896,0.6162,0.4669,0.2879,0.116,0.0141,0.0,0.0,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.7838,0.0316,0.0,0.0],[0.9866,0.985,0.9842,0.9811,0.9811,0.9811,0.9811,0.9811,0.9811,0.9803,0.9803,0.9787,0.9787,0.9787,0.9787,0.9787,0.9787,0.9787,0.9787,0.9779,0.9779,0.9779,0.9779,0.9779,0.9779,0.9779,0.9774,0.9771,0.9771,0.9763,0.9763,0.9763,0.9763,0.976,0.9755,0.9752,0.9748,0.9748,0.9748,0.9748,0.9748,0.9745,0.974,0.9732,0.973,0.9724,0.9724,0.9724,0.9716,0.9716,0.9716,0.9716,0.9716,0.9716,0.9716,0.9713,0.9708,0.9708,0.9697,0.9692,0.9683,0.9677,0.9677,0.967,0.9648,0.9637,0.9628,0.9618,0.9611,0.9594,0.958,0.9558,0.9554,0.955,0.9533,0.9508,0.9482,0.9469,0.9438,0.9388,0.9316,0.9265,0.9143,0.8954,0.875,0.8404,0.7941,0.7209,0.5672,0.3766,0.1899,0.0593,0.0119,0.0036,0.0,0.0,0.0,0.0,0.0,0.0,0.0],[1.0,0.9972,0.9944,0.9889,0.9889,0.9889,0.9889,0.9889,0.9889,0.9883,0.9833,0.9833,0.9833,0.9833,0.9833,0.9833,0.9833,0.982,0.9807,0.9806,0.9806,0.9806,0.9806,0.9806,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9778,0.9777,0.9768,0.9759,0.975,0.975,0.975,0.975,0.9734,0.9722,0.9722,0.9722,0.9722,0.9719,0.9707,0.9696,0.9694,0.9694,0.9694,0.9694,0.9659,0.9639,0.9635,0.9631,0.9627,0.9623,0.9618,0.9614,0.9597,0.9547,0.9533,0.9494,0.9477,0.9445,0.9402,0.9316,0.9172,0.901,0.8763,0.83,0.7195,0.5746,0.4009,0.2301,0.0538,0.0051,0.0,0.0,0.0,0.0],[1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,0.9996,0.9991,0.9989,0.9989,0.9989,0.9989,0.9989,0.9989,0.9988,0.9986,0.9983,0.9981,0.9979,0.9978,0.9978,0.9978,0.9978,0.9978,0.9978,0.9976,0.996,0.9932,0.9922,0.9899,0.9847,0.9722,0.9507,0.914,0.8139,0.6481,0.4186,0.1698,0.0357,0.0019,0.0,0.0,0.0,0.0,0.0,0.0,0.0]]}],"confusion":[[1128,0,0,0,0,2,8],[0,1262,0,9,14,0,714],[0,0,154,0,0,0,1],[0,0,0,1240,1,1,603],[0,2,0,1,345,1,289],[0,0,0,1,0,926,105],[0,4,0,17,0,0,0]]},"v2":{"epoch":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60],"box":[1.0776,0.8046,0.7624,0.7143,0.6903,0.6604,0.6357,0.6476,0.6224,0.604,0.5957,0.5956,0.5779,0.5708,0.5684,0.5508,0.5511,0.5532,0.5449,0.539,0.5347,0.5223,0.5193,0.5171,0.5092,0.5075,0.5064,0.4955,0.496,0.4941,0.4928,0.4844,0.4823,0.4812,0.4824,0.4799,0.4662,0.4639,0.4645,0.4639,0.4528,0.4515,0.451,0.4516,0.4493,0.4453,0.4431,0.4398,0.4395,0.4337,0.372,0.3664,0.3607,0.3577,0.3532,0.3464,0.3443,0.3418,0.3378,0.337],"cls":[1.5564,0.6421,0.5797,0.539,0.515,0.4956,0.4784,0.4731,0.4546,0.45,0.4407,0.4367,0.4278,0.4216,0.4187,0.4112,0.4087,0.4105,0.404,0.4002,0.3963,0.3886,0.3862,0.3848,0.3783,0.3772,0.3736,0.3645,0.3688,0.3655,0.3653,0.3593,0.358,0.3602,0.3609,0.3573,0.3474,0.3438,0.3462,0.3432,0.3367,0.3381,0.3368,0.3349,0.3344,0.3306,0.3308,0.3287,0.3278,0.322,0.2668,0.2602,0.2575,0.2575,0.2535,0.2486,0.2479,0.2455,0.2425,0.2423],"dfl":[1.0754,0.9346,0.9154,0.9021,0.898,0.886,0.8802,0.8827,0.8737,0.8719,0.8679,0.8677,0.8671,0.8624,0.8623,0.8578,0.858,0.8582,0.8583,0.8556,0.8512,0.8518,0.8493,0.85,0.8442,0.8505,0.8453,0.841,0.8438,0.8412,0.8412,0.8417,0.8377,0.8409,0.842,0.841,0.8382,0.8355,0.8358,0.8339,0.8346,0.8352,0.8344,0.8316,0.8345,0.8312,0.8295,0.8296,0.8303,0.8311,0.7952,0.7962,0.7951,0.7943,0.7948,0.7922,0.7905,0.7921,0.7892,0.7887],"vbox":[0.7958,0.7764,0.6398,0.6498,0.5888,0.5809,0.5411,0.5268,0.5298,0.5081,0.4949,0.5096,0.4836,0.4962,0.4671,0.4828,0.4465,0.4707,0.4425,0.4534,0.4302,0.4227,0.4187,0.4137,0.4135,0.4489,0.4159,0.399,0.3941,0.404,0.3962,0.3989,0.403,0.3889,0.393,0.3875,0.375,0.3816,0.3707,0.3672,0.3691,0.3639,0.3643,0.3604,0.3575,0.3631,0.3635,0.3535,0.3541,0.3492,0.3504,0.3541,0.342,0.339,0.3336,0.3311,0.3338,0.3275,0.3261,0.3267],"vcls":[0.7597,0.5949,0.5169,0.4675,0.436,0.4222,0.4172,0.3822,0.3787,0.3743,0.3643,0.3617,0.3468,0.3493,0.345,0.347,0.3261,0.3379,0.3234,0.3216,0.3125,0.3043,0.3075,0.3008,0.2972,0.3143,0.2937,0.2888,0.2886,0.2848,0.2855,0.288,0.2883,0.2794,0.283,0.2761,0.2696,0.2722,0.2738,0.2646,0.2614,0.2591,0.2586,0.2586,0.257,0.2599,0.2553,0.252,0.2524,0.2495,0.25,0.2467,0.2449,0.2413,0.2377,0.2368,0.2369,0.2325,0.2317,0.2307],"vdfl":[0.9156,0.9021,0.8662,0.8653,0.8509,0.8492,0.8414,0.8352,0.8312,0.8294,0.8266,0.8286,0.8217,0.8248,0.817,0.8202,0.8148,0.8194,0.8122,0.8123,0.8091,0.8058,0.8076,0.8057,0.8057,0.8093,0.8051,0.8002,0.8006,0.8019,0.8006,0.8007,0.8029,0.7987,0.8,0.798,0.7957,0.7963,0.7943,0.7941,0.7939,0.7943,0.7923,0.7933,0.7929,0.7925,0.7921,0.7907,0.7912,0.7909,0.7903,0.7898,0.7887,0.7891,0.7878,0.7872,0.7874,0.7861,0.786,0.7864],"p":[0.901,0.9508,0.9602,0.9705,0.9833,0.9802,0.9786,0.9868,0.9865,0.9756,0.9873,0.9855,0.9855,0.9895,0.9862,0.9888,0.9893,0.9902,0.9894,0.9924,0.9913,0.9933,0.9913,0.9903,0.9901,0.9912,0.9943,0.9922,0.9887,0.9932,0.9923,0.9944,0.9917,0.9907,0.9923,0.994,0.9922,0.9929,0.9916,0.9958,0.9922,0.9923,0.9947,0.9941,0.9936,0.9932,0.9919,0.9947,0.9943,0.9934,0.9936,0.996,0.9956,0.9967,0.9961,0.9967,0.9955,0.9948,0.9971,0.9965],"r":[0.9266,0.9308,0.9586,0.9657,0.9672,0.9639,0.9687,0.9741,0.9724,0.9701,0.9734,0.9785,0.9789,0.9766,0.9783,0.9761,0.9814,0.9805,0.9815,0.9776,0.9815,0.9817,0.9819,0.984,0.9844,0.9809,0.9826,0.9835,0.9858,0.9826,0.984,0.9838,0.9856,0.9858,0.9852,0.9833,0.9858,0.9878,0.9865,0.9844,0.9878,0.9887,0.9864,0.9872,0.9875,0.9875,0.9884,0.9856,0.9866,0.9882,0.9888,0.9868,0.9872,0.9875,0.988,0.988,0.9886,0.9891,0.9872,0.9877],"m50":[0.9505,0.9628,0.982,0.9858,0.9885,0.988,0.9887,0.9899,0.9895,0.99,0.9908,0.9916,0.9917,0.9918,0.9922,0.9921,0.9934,0.9925,0.9932,0.9908,0.9929,0.9933,0.9933,0.993,0.993,0.9936,0.9936,0.9935,0.9936,0.994,0.9938,0.9939,0.9933,0.9938,0.9941,0.994,0.994,0.9938,0.9939,0.9942,0.9943,0.9942,0.9942,0.9943,0.994,0.9945,0.9944,0.9942,0.9945,0.9944,0.9945,0.9944,0.9946,0.9945,0.9946,0.9946,0.9945,0.9946,0.9946,0.9946],"m5095":[0.7246,0.7458,0.8174,0.8178,0.8403,0.8415,0.8569,0.8642,0.865,0.8713,0.8743,0.8709,0.8773,0.8786,0.8865,0.878,0.8949,0.886,0.8978,0.891,0.8995,0.9023,0.9052,0.9049,0.9026,0.8966,0.9059,0.9086,0.9107,0.9069,0.9105,0.9109,0.9115,0.9124,0.9125,0.9129,0.9172,0.9175,0.9201,0.9199,0.9189,0.9197,0.9198,0.922,0.9235,0.9221,0.921,0.9247,0.9253,0.9254,0.9264,0.9255,0.928,0.9297,0.9301,0.9311,0.9313,0.9321,0.9334,0.933]},"v1":{"epoch":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50],"box":[1.0965,0.8609,0.815,0.7202,0.6881,0.6279,0.5709,0.5803,0.5612,0.5605,0.5591,0.511,0.5136,0.481,0.4687,0.4701,0.4561,0.4488,0.4546,0.4536,0.4481,0.4444,0.4595,0.4243,0.4014,0.4057,0.413,0.4004,0.3979,0.3891,0.4103,0.3775,0.38,0.377,0.3672,0.3687,0.3736,0.3548,0.3631,0.3525,0.2619,0.2624,0.2569,0.2358,0.2386,0.223,0.2188,0.2182,0.2098,0.2031],"cls":[2.5735,1.2968,1.0033,0.8937,0.8441,0.7957,0.7311,0.7317,0.6863,0.6569,0.6502,0.6091,0.6062,0.5554,0.5404,0.5377,0.5235,0.5037,0.5136,0.5043,0.484,0.4929,0.4955,0.4724,0.4443,0.4397,0.4427,0.4359,0.427,0.4142,0.4286,0.4193,0.4127,0.405,0.4021,0.4011,0.3971,0.3894,0.3893,0.3785,0.3076,0.2992,0.2984,0.2833,0.2821,0.2707,0.2656,0.2632,0.2584,0.2519],"dfl":[1.154,1.0305,1.0061,0.9707,0.9597,0.9478,0.9224,0.9339,0.9248,0.9222,0.9211,0.9004,0.9124,0.8822,0.8922,0.8923,0.8886,0.883,0.8874,0.8889,0.878,0.8883,0.8865,0.8831,0.8712,0.8744,0.8693,0.8763,0.8724,0.8665,0.876,0.8635,0.8696,0.8716,0.8578,0.8686,0.8703,0.8581,0.8666,0.8591,0.8022,0.7941,0.8011,0.7933,0.7994,0.8004,0.7939,0.7961,0.792,0.7939],"vbox":[0.6574,0.7628,0.8171,1.2469,0.7302,0.5435,0.464,0.4349,0.4425,0.4286,0.4127,0.379,0.3663,0.3315,0.3301,0.2793,0.2799,0.291,0.2974,0.3636,0.327,0.2799,0.2636,0.2432,0.2494,0.3113,0.2852,0.2178,0.2852,0.2527,0.2732,0.2697,0.2125,0.2727,0.2508,0.2352,0.2275,0.2366,0.2139,0.2122,0.2696,0.2186,0.2281,0.2179,0.1801,0.195,0.1759,0.1731,0.1888,0.1781],"vcls":[2.8001,2.8619,3.0792,3.4487,1.5734,0.9941,0.7352,0.6212,0.6201,0.6036,0.5616,0.5191,0.5037,0.4497,0.4531,0.4269,0.4111,0.3913,0.4017,0.4005,0.3801,0.3647,0.3604,0.3365,0.3288,0.3387,0.3177,0.304,0.3191,0.3104,0.3121,0.3062,0.2808,0.2965,0.2881,0.277,0.2737,0.2712,0.2593,0.2596,0.2783,0.2647,0.262,0.2481,0.2361,0.2391,0.2315,0.2288,0.2283,0.2232],"vdfl":[0.8595,0.9339,1.5767,1.7754,1.007,0.8827,0.8588,0.8398,0.8416,0.8313,0.8303,0.8183,0.8096,0.8033,0.803,0.7967,0.7956,0.7992,0.7994,0.8085,0.7993,0.7975,0.7955,0.7889,0.7902,0.8014,0.7948,0.7856,0.7967,0.7941,0.7966,0.7961,0.7856,0.7896,0.7877,0.786,0.7825,0.7839,0.7823,0.7834,0.7863,0.7795,0.7799,0.7808,0.7778,0.7794,0.777,0.7771,0.7776,0.7762],"p":[0.0236,0.663,0.0193,0.0123,0.6615,0.9491,0.9539,0.9607,0.9815,0.9711,0.9829,0.9765,0.9826,0.9862,0.984,0.9817,0.9754,0.9859,0.9882,0.9912,0.9804,0.9892,0.9928,0.9928,0.9939,0.9928,0.9913,0.9966,0.9943,0.9936,0.9897,0.9935,0.9881,0.9897,0.9866,0.9913,0.9986,0.9947,0.9898,0.9938,0.9947,0.9967,0.998,0.9988,0.9955,0.9957,0.9979,0.9977,0.9997,0.9997],"r":[0.9841,0.3765,0.9032,0.5587,0.6762,0.9159,0.9286,0.9604,0.9683,0.9635,0.9746,0.9825,0.9746,0.9809,0.9794,0.9785,0.9795,0.962,0.9785,0.9778,0.9845,0.9809,0.9873,0.9905,0.9873,0.9889,0.9887,0.9825,0.9873,0.9841,0.9879,0.9857,0.9908,0.9919,0.9862,0.9856,0.9841,0.9866,0.9928,0.9889,0.9889,0.9873,0.9892,0.9905,0.9952,0.9905,0.9918,0.9937,0.9918,0.9897],"m50":[0.798,0.5904,0.0553,0.007,0.645,0.958,0.9676,0.9849,0.9801,0.9834,0.9874,0.9885,0.9903,0.9917,0.9914,0.9918,0.9913,0.9897,0.9925,0.9921,0.9928,0.9927,0.994,0.9943,0.9921,0.9942,0.9946,0.9939,0.994,0.9943,0.9942,0.9944,0.9946,0.9943,0.9916,0.9939,0.9943,0.9928,0.9944,0.9944,0.9943,0.9944,0.9937,0.9949,0.995,0.9945,0.9948,0.9949,0.9944,0.9945],"m5095":[0.6451,0.4244,0.0462,0.0051,0.5497,0.8242,0.8435,0.8848,0.8663,0.8752,0.9001,0.9039,0.9123,0.9241,0.921,0.942,0.94,0.9277,0.938,0.9223,0.9423,0.9455,0.9488,0.9552,0.9506,0.9413,0.9473,0.9595,0.9587,0.9506,0.9528,0.9511,0.9636,0.956,0.954,0.9605,0.9629,0.9692,0.9668,0.9689,0.9578,0.9678,0.9665,0.9735,0.976,0.975,0.9802,0.9793,0.9774,0.9782]},"eval":{"A":{"code_conformance":0.9944,"counts":{"code_checked":360,"code_conformant":358,"diagrams":360,"endpoint_correct":387,"endpoint_pairs":630,"event_exact":0,"event_total":347,"final_gt":154,"final_pred":0,"final_tp":0,"graph_exact_full":0,"graph_exact_structure":0,"initial_correct":0,"initial_total":360,"label_char_errors":3570,"label_chars":3570,"label_exact":0,"label_total":347,"state_ocr_char_errors":6651,"state_ocr_chars":6651,"state_ocr_exact":0,"state_ocr_total":1050,"state_type_correct":654,"state_type_total":1094,"states_gt":1282,"states_pred":1212,"states_tp":1094,"transitions_gt":1268,"transitions_pred":1660,"transitions_tp":469,"transitions_undirected_tp":712},"diagrams":360,"endpoint_accuracy":0.6143,"event_exact":0.0,"final_states":{"f1":null,"precision":null,"recall":0.0},"graph_exact_full":0.0,"graph_exact_structure":0.0,"initial_state_accuracy":0.0,"label_ocr_cer":1.0,"label_ocr_exact":0.0,"model":"runs/detect/train/weights/best.pt","pipeline":"legacy-box-association","split":"test","state_ocr_cer":1.0,"state_ocr_exact":0.0,"state_type_accuracy":0.5978,"states":{"f1":0.8773,"precision":0.9026,"recall":0.8534},"transitions":{"f1":0.3203,"precision":0.2825,"recall":0.3699},"transitions_undirected":{"f1":0.4863,"precision":0.4289,"recall":0.5615}},"B":{"code_conformance":0.9944,"counts":{"code_checked":360,"code_conformant":358,"diagrams":360,"endpoint_correct":553,"endpoint_pairs":697,"event_exact":120,"event_total":472,"final_gt":154,"final_pred":25,"final_tp":25,"graph_exact_full":7,"graph_exact_structure":32,"initial_correct":187,"initial_total":360,"label_char_errors":2918,"label_chars":4730,"label_exact":101,"label_total":472,"state_ocr_char_errors":387,"state_ocr_chars":6651,"state_ocr_exact":877,"state_ocr_total":1050,"state_type_correct":834,"state_type_total":1094,"states_gt":1282,"states_pred":1212,"states_tp":1094,"transitions_gt":1268,"transitions_pred":920,"transitions_tp":640,"transitions_undirected_tp":784},"diagrams":360,"endpoint_accuracy":0.7934,"event_exact":0.2542,"final_states":{"f1":0.2793,"precision":1.0,"recall":0.1623},"graph_exact_full":0.0194,"graph_exact_structure":0.0889,"initial_state_accuracy":0.5194,"label_ocr_cer":0.6169,"label_ocr_exact":0.214,"model":"runs/detect/train/weights/best.pt","pipeline":"stroke-tracing+ocr","split":"test","state_ocr_cer":0.0582,"state_ocr_exact":0.8352,"state_type_accuracy":0.7623,"states":{"f1":0.8773,"precision":0.9026,"recall":0.8534},"transitions":{"f1":0.585,"precision":0.6957,"recall":0.5047},"transitions_undirected":{"f1":0.7166,"precision":0.8522,"recall":0.6183}},"C":{"code_conformance":1.0,"counts":{"code_checked":360,"code_conformant":360,"diagrams":360,"endpoint_correct":956,"endpoint_pairs":992,"event_exact":645,"event_total":864,"final_gt":154,"final_pred":153,"final_tp":153,"graph_exact_full":97,"graph_exact_structure":259,"initial_correct":354,"initial_total":360,"label_char_errors":1971,"label_chars":8628,"label_exact":565,"label_total":864,"state_ocr_char_errors":409,"state_ocr_chars":7812,"state_ocr_exact":1042,"state_ocr_total":1230,"state_type_correct":1275,"state_type_total":1282,"states_gt":1282,"states_pred":1282,"states_tp":1282,"transitions_gt":1268,"transitions_pred":1212,"transitions_tp":1151,"transitions_undirected_tp":1187},"diagrams":360,"endpoint_accuracy":0.9637,"event_exact":0.7465,"final_states":{"f1":0.9967,"precision":1.0,"recall":0.9935},"graph_exact_full":0.2694,"graph_exact_structure":0.7194,"initial_state_accuracy":0.9833,"label_ocr_cer":0.2284,"label_ocr_exact":0.6539,"model":"runs/detect/v2/weights/best.pt","pipeline":"stroke-tracing+ocr","split":"test","state_ocr_cer":0.0524,"state_ocr_exact":0.8472,"state_type_accuracy":0.9945,"states":{"f1":1.0,"precision":1.0,"recall":1.0},"transitions":{"f1":0.9282,"precision":0.9497,"recall":0.9077},"transitions_undirected":{"f1":0.9573,"precision":0.9794,"recall":0.9361}}}};
+</script>
+<script>
+(function () {
+'use strict';
+const CLS = D.det.names;
+const CLS_VAR = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6'];
+const NI = D.det.per_class.map(c => c.instances);
+const TOTAL = NI.reduce((a, b) => a + b, 0);
+const CV = D.det.curves;
+const PRC = CV[0], F1C = CV[1], PC = CV[2], RC = CV[3];
+const NS = 'http://www.w3.org/2000/svg';
+
+const f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+const num = v => v.toLocaleString('en-US');
+const pct1 = v => (v * 100).toFixed(1) + '%';
+
+function H(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in (attrs || {})) {
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'text') e.textContent = attrs[k];
+    else if (k === 'style') e.setAttribute('style', attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const kid of kids.flat()) { if (kid == null) continue; e.append(kid.nodeType ? kid : document.createTextNode(String(kid))); }
+  return e;
+}
+function SV(tag, attrs, style) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in (attrs || {})) e.setAttribute(k, attrs[k]);
+  if (style) for (const k in style) e.style.setProperty(k, style[k]);
+  return e;
+}
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+
+const mean = rows => rows[0].map((_, i) => rows.reduce((a, r) => a + r[i], 0) / rows.length);
+const nearest = (arr, v) => { let b = 0, bd = Infinity; for (let i = 0; i < arr.length; i++) { const d = Math.abs(arr[i] - v); if (d < bd) { bd = d; b = i; } } return b; };
+const MEAN = {
+  pr: mean(PRC.y), p: mean(PC.y), r: mean(RC.y), f1: mean(F1C.y)
+};
+const f1At = (rows, k) => k === 'mean' ? MEAN.f1 : rows[k];
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function tipFill(title, rows) {
+  tip.textContent = '';
+  if (title) tip.append(H('div', { class: 'tt', text: title }));
+  rows.forEach(r => {
+    const row = H('div', { class: 'tr' });
+    if (r.color) row.append(H('i', { style: '--c:' + r.color }));
+    row.append(H('span', { text: r.name }), H('b', { text: r.value }));
+    tip.append(row);
+  });
+}
+function tipPlace(x, y) {
+  tip.hidden = false;
+  const r = tip.getBoundingClientRect();
+  let l = x + 14, t = y + 14;
+  if (l + r.width > innerWidth - 8) l = x - r.width - 14;
+  if (t + r.height > innerHeight - 8) t = y - r.height - 14;
+  tip.style.left = Math.max(8, l) + 'px';
+  tip.style.top = Math.max(8, t) + 'px';
+}
+const tipHide = () => { tip.hidden = true; };
+function attachTip(el, fn) {
+  el.tabIndex = 0;
+  const show = e => {
+    const c = fn(); tipFill(c.title, c.rows);
+    if (e && e.clientX !== undefined && e.type !== 'focus') tipPlace(e.clientX, e.clientY);
+    else { const b = el.getBoundingClientRect(); tipPlace(b.left + b.width / 2, b.top + b.height / 2); }
+  };
+  el.addEventListener('pointermove', show);
+  el.addEventListener('focus', show);
+  el.addEventListener('pointerleave', tipHide);
+  el.addEventListener('blur', tipHide);
+}
+
+/* ---------- axis ticks ---------- */
+function niceTicks(lo, hi, n) {
+  const span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw) || mag * 10;
+  const out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+
+/* ---------- line chart ---------- */
+function lineChart(host, o) {
+  host.textContent = '';
+  const W = Math.max(280, Math.floor(host.clientWidth || 600)), HT = o.height || 330;
+  const m = { l: o.ml || 50, r: 14, t: 12, b: 46 };
+  const iw = W - m.l - m.r, ih = HT - m.t - m.b;
+  const X = v => m.l + (v - o.xd[0]) / (o.xd[1] - o.xd[0]) * iw;
+  const Y = v => m.t + ih - (v - o.yd[0]) / (o.yd[1] - o.yd[0]) * ih;
+  const svg = SV('svg', { width: W, height: HT, viewBox: '0 0 ' + W + ' ' + HT, role: 'img', 'aria-label': o.label, tabindex: 0 });
+  const cid = 'clip' + Math.random().toString(36).slice(2, 8);
+  const defs = SV('defs'); const cp = SV('clipPath', { id: cid });
+  cp.append(SV('rect', { x: m.l, y: m.t - 2, width: iw, height: ih + 4 })); defs.append(cp); svg.append(defs);
+
+  o.yticks.forEach(t => {
+    svg.append(SV('line', { x1: m.l, x2: m.l + iw, y1: Y(t), y2: Y(t) }, { stroke: 'var(--grid)', 'stroke-width': 1 }));
+    const tx = SV('text', { x: m.l - 8, y: Y(t) + 4, 'text-anchor': 'end' }); tx.textContent = (o.fmtY || String)(t); svg.append(tx);
+  });
+  o.xticks.forEach(t => {
+    const tx = SV('text', { x: X(t), y: m.t + ih + 18, 'text-anchor': 'middle' }); tx.textContent = (o.fmtXt || String)(t); svg.append(tx);
+  });
+  svg.append(SV('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih }, { stroke: 'var(--axis)', 'stroke-width': 1 }));
+  const xl = SV('text', { x: m.l + iw / 2, y: HT - 6, 'text-anchor': 'middle', class: 'axl' }); xl.textContent = o.xlabel; svg.append(xl);
+  const yl = SV('text', { x: 12, y: m.t + ih / 2, 'text-anchor': 'middle', transform: 'rotate(-90 12 ' + (m.t + ih / 2) + ')', class: 'axl' }); yl.textContent = o.ylabel; svg.append(yl);
+
+  const plot = SV('g', { 'clip-path': 'url(#' + cid + ')' });
+  if (o.vline != null) {
+    plot.append(SV('line', { x1: X(o.vline), x2: X(o.vline), y1: m.t, y2: m.t + ih }, { stroke: 'var(--ink2)', 'stroke-width': 1.5 }));
+  }
+  o.series.forEach(s => {
+    let d = '';
+    s.y.forEach((v, i) => { d += (i ? 'L' : 'M') + X(s.x[i]).toFixed(1) + ' ' + Y(v).toFixed(1); });
+    plot.append(SV('path', { d, fill: 'none' }, { stroke: 'var(' + s.color + ')', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+  });
+  svg.append(plot);
+  (o.marks || []).forEach(mk => {
+    if (mk.x < o.xd[0] || mk.x > o.xd[1] || mk.y < o.yd[0] || mk.y > o.yd[1]) return;
+    svg.append(SV('circle', { cx: X(mk.x), cy: Y(mk.y), r: 5 }, { fill: 'var(' + mk.color + ')', stroke: 'var(--surface)', 'stroke-width': 2 }));
+  });
+
+  const cross = SV('line', { y1: m.t, y2: m.t + ih }, { stroke: 'var(--muted)', 'stroke-width': 1, display: 'none' });
+  const dots = SV('g'); svg.append(cross, dots);
+  const base = o.series[0].x;
+  let cur = -1;
+  function at(i, cx, cy) {
+    cur = Math.max(0, Math.min(base.length - 1, i));
+    const xv = base[cur];
+    cross.setAttribute('x1', X(xv)); cross.setAttribute('x2', X(xv)); cross.style.display = '';
+    dots.textContent = '';
+    o.series.forEach(s => {
+      const yv = s.y[cur];
+      if (yv >= o.yd[0] && yv <= o.yd[1]) dots.append(SV('circle', { cx: X(xv), cy: Y(yv), r: 4.5 }, { fill: 'var(' + s.color + ')', stroke: 'var(--surface)', 'stroke-width': 2 }));
+    });
+    tipFill(o.xname + ' ' + (o.fmtX || String)(xv), o.series.map(s => ({ color: 'var(' + s.color + ')', name: s.name, value: (o.fmtV || f3)(s.y[cur]) })));
+    if (cx != null) tipPlace(cx, cy);
+    else { const b = svg.getBoundingClientRect(); tipPlace(b.left + X(xv), b.top + m.t + 20); }
+  }
+  const hide = () => { cross.style.display = 'none'; dots.textContent = ''; tipHide(); };
+  const ov = SV('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' });
+  ov.addEventListener('pointermove', e => {
+    const b = svg.getBoundingClientRect();
+    const xv = o.xd[0] + (e.clientX - b.left - m.l) / iw * (o.xd[1] - o.xd[0]);
+    at(nearest(base, xv), e.clientX, e.clientY);
+  });
+  ov.addEventListener('pointerleave', hide);
+  svg.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') { at((cur < 0 ? 0 : cur + 1)); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft') { at((cur < 0 ? base.length - 1 : cur - 1)); e.preventDefault(); }
+    else if (e.key === 'Escape') hide();
+  });
+  svg.addEventListener('blur', hide);
+  svg.append(ov);
+  host.append(svg);
+}
+
+/* ---------- horizontal bars ---------- */
+function barRows(host, rows, o) {
+  o = o || {}; host.textContent = '';
+  const max = o.max || 1;
+  rows.forEach(r => {
+    const bars = H('div', { class: 'bars' });
+    r.bars.forEach(b => {
+      const bar = H('span', { class: 'bar', style: '--c:var(' + b.color + ');width:' + Math.max(0, b.value / max * 100) + '%' });
+      const line = H('div', { class: 'bline' }, H('div', { class: 'btrack' }, bar), H('span', { class: 'bval', text: b.text }));
+      attachTip(line, () => ({ title: r.label, rows: [{ color: 'var(' + b.color + ')', name: b.name, value: b.text }].concat(r.extra || []) }));
+      bars.append(line);
+    });
+    host.append(H('div', { class: 'brow' }, H('div', { class: 'bl', text: r.label }), bars));
+  });
+}
+
+/* ---------- tables ---------- */
+function table(head, rows, o) {
+  o = o || {};
+  const t = H('table', { class: 't' });
+  t.append(H('thead', {}, H('tr', {}, head.map(h => H('th', { text: h })))));
+  const tb = H('tbody');
+  rows.forEach((r, i) => tb.append(H('tr', o.hl && o.hl(i) ? { class: 'hl' } : {}, r.map(c => H('td', { text: c })))));
+  t.append(tb); return t;
+}
+
+/* ---------- state ---------- */
+const ST = {
+  tab: 'summary', conf: 0.40, zoom: true,
+  shown: new Set([0, 1, 2, 3, 4, 5, 'mean']), confClass: 'mean',
+  cmErr: false, model: 'v2', tz: false, loss: 'box', stack: 'recall', calc: 'C'
+};
+
+/* ---------- SUMMARY ---------- */
+function renderSummary() {
+  const ev = D.eval;
+  if ($('#sumBars')) barRows($('#sumBars'), [
+    { label: 'A original', bars: [{ name: 'Transition F1', color: '--pa', value: ev.A.transitions.f1, text: f3(ev.A.transitions.f1) }] },
+    { label: 'B new linking', bars: [{ name: 'Transition F1', color: '--pb', value: ev.B.transitions.f1, text: f3(ev.B.transitions.f1) }] },
+    { label: 'C new linking and detector', bars: [{ name: 'Transition F1', color: '--s1', value: ev.C.transitions.f1, text: f3(ev.C.transitions.f1) }] }
+  ]);
+  const o = D.det.overall;
+  const tiles = [
+    ['Precision', f3(o.precision), 'few false detections'],
+    ['Recall', f3(o.recall), 'few missed objects'],
+    ['mAP@50', f3(o.map50), 'overlap of at least 50%'],
+    ['mAP@50-95', f3(o.map5095), 'stricter box placement'],
+    ['Objects', num(TOTAL), 'in 360 test images']
+  ];
+  const host = $('#sumTiles'); host.textContent = '';
+  tiles.forEach(t => host.append(H('div', { class: 'tile' }, H('div', { class: 'k', text: t[0] }), H('div', { class: 'v', text: t[1] }), H('div', { class: 'n', text: t[2] }))));
+}
+
+/* ---------- DETECTOR ---------- */
+function buildChips() {
+  const host = $('#chips'); host.textContent = '';
+  const mk = (key, name, cvar) => {
+    const b = H('button', { class: 'chip', 'aria-pressed': String(ST.shown.has(key)), style: '--c:var(' + cvar + ')' }, H('i'), name);
+    b.addEventListener('click', () => {
+      if (ST.shown.has(key)) { if (ST.shown.size > 1) ST.shown.delete(key); } else ST.shown.add(key);
+      buildChips(); renderDetector();
+    });
+    host.append(b);
+  };
+  CLS.forEach((n, i) => mk(i, n, CLS_VAR[i]));
+  mk('mean', 'Mean of classes', '--ink');
+  const sel = $('#confClass');
+  if (!sel.options.length) {
+    sel.append(H('option', { value: 'mean', text: 'Mean of classes' }));
+    CLS.forEach((n, i) => sel.append(H('option', { value: String(i), text: n })));
+    sel.addEventListener('change', () => { ST.confClass = sel.value === 'mean' ? 'mean' : +sel.value; renderDetector(); });
+  }
+}
+function curvePair(k, ci) {
+  return {
+    p: k === 'mean' ? MEAN.p[ci] : PC.y[k][ci],
+    r: k === 'mean' ? MEAN.r[ci] : RC.y[k][ci],
+    f: k === 'mean' ? MEAN.f1[ci] : F1C.y[k][ci]
+  };
+}
+function renderDetector() {
+  const ci = nearest(PC.x, ST.conf);
+  $('#confval').textContent = f2(ST.conf); const cv2 = $('#confval2'); if (cv2) cv2.textContent = f2(ST.conf);
+  $('#conf').value = ST.conf;
+  const zoom = ST.zoom;
+  const d = zoom ? [0.8, 1] : [0, 1];
+  const ticks = zoom ? [0.8, 0.85, 0.9, 0.95, 1] : [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const keys = Array.from(ST.shown).sort((a, b) => (a === 'mean' ? 99 : a) - (b === 'mean' ? 99 : b));
+  const series = keys.map(k => ({ name: k === 'mean' ? 'Mean of classes' : CLS[k], color: k === 'mean' ? '--ink' : CLS_VAR[k], x: PRC.x, y: k === 'mean' ? MEAN.pr : PRC.y[k] }));
+  const marks = keys.map(k => { const c = curvePair(k, ci); return { x: c.r, y: c.p, color: k === 'mean' ? '--ink' : CLS_VAR[k] }; });
+  lineChart($('#prChart'), { label: 'Precision against recall for each class', series, xd: d, yd: d, xticks: ticks, yticks: ticks, xlabel: 'Recall', ylabel: 'Precision', xname: 'Recall', fmtX: f3, fmtXt: v => String(v), fmtY: v => String(v), marks, height: 340 });
+  $('#prTable').replaceChildren(table(['Recall'].concat(series.map(s => s.name)),
+    [0, 0.5, 0.8, 0.9, 0.95, 0.98, 0.99].map(rv => { const i = nearest(PRC.x, rv); return [f2(rv)].concat(series.map(s => f3(s.y[i]))); })));
+
+  const ck = ST.confClass;
+  const cs = [
+    { name: 'Precision', color: '--s1', x: PC.x, y: ck === 'mean' ? MEAN.p : PC.y[ck] },
+    { name: 'Recall', color: '--s2', x: PC.x, y: ck === 'mean' ? MEAN.r : RC.y[ck] },
+    { name: 'F1', color: '--s3', x: PC.x, y: ck === 'mean' ? MEAN.f1 : F1C.y[ck] }
+  ];
+  const cp = curvePair(ck, ci);
+  lineChart($('#confChart'), { label: 'Precision, recall and F1 against confidence', series: cs, xd: [0, 1], yd: [0, 1], xticks: [0, 0.2, 0.4, 0.6, 0.8, 1], yticks: [0, 0.2, 0.4, 0.6, 0.8, 1], xlabel: 'Confidence threshold', ylabel: 'Score', xname: 'Confidence', fmtX: f2, vline: ST.conf, marks: [{ x: ST.conf, y: cp.p, color: '--s1' }, { x: ST.conf, y: cp.r, color: '--s2' }, { x: ST.conf, y: cp.f, color: '--s3' }], height: 300 });
+  const ro = $('#readout'); ro.textContent = '';
+  [['Precision', cp.p], ['Recall', cp.r], ['F1', cp.f]].forEach(a => ro.append(H('div', {}, H('span', { class: 'k', text: a[0] + ' at ' + f2(ST.conf) }), H('span', { class: 'v', text: f3(a[1]) }))));
+  $('#confTable').replaceChildren(table(['Confidence', 'Precision', 'Recall', 'F1'],
+    [0.1, 0.3, 0.4, 0.5, 0.7, 0.9].map(c => { const i = nearest(PC.x, c); const q = curvePair(ck, i); return [f2(c), f3(q.p), f3(q.r), f3(q.f)]; })));
+
+  const rows = CLS.map((n, i) => { const q = curvePair(i, ci); return [n, num(NI[i]), f3(q.p), f3(q.r), f3(q.f)]; });
+  const q = curvePair('mean', ci); rows.push(['Mean of classes', num(TOTAL), f3(q.p), f3(q.r), f3(q.f)]);
+  const minR = Math.min.apply(null, CLS.map((_, i) => curvePair(i, ci).r));
+  $('#opTable').replaceChildren(table(['Class', 'Objects', 'Precision', 'Recall', 'F1'], rows, { hl: i => i < CLS.length && curvePair(i, ci).r === minR }));
+}
+
+/* ---------- CLASSES ---------- */
+function renderClasses() {
+  const pc = D.det.per_class;
+  barRows($('#apBars'), pc.map(c => ({
+    label: c.name,
+    extra: [{ name: 'Objects in test split', value: num(c.instances) }],
+    bars: [
+      { name: 'AP@50', color: '--s1', value: c.ap50, text: f3(c.ap50) },
+      { name: 'AP@50-95', color: '--s2', value: c.ap5095, text: f3(c.ap5095) }
+    ]
+  })));
+  const low = Math.min.apply(null, pc.map(c => c.ap5095));
+  $('#clsTable').replaceChildren(table(['Class', 'Objects', 'Precision', 'Recall', 'AP@50', 'AP@50-95'],
+    pc.map(c => [c.name, num(c.instances), f3(c.precision), f3(c.recall), f3(c.ap50), f3(c.ap5095)]), { hl: i => pc[i].ap5095 === low }));
+  buildCM();
+}
+function buildCM() {
+  const M = D.det.confusion, n = CLS.length;
+  const host = $('#cm'); host.textContent = '';
+  host.append(H('div', { class: 'h' }));
+  CLS.forEach(c => host.append(H('div', { class: 'h', text: c })));
+  host.append(H('div', { class: 'h', text: 'Missed' }));
+  let maxOff = 1;
+  for (let k = 0; k < n; k++) for (let j = 0; j <= n; j++) if (j !== k) maxOff = Math.max(maxOff, M[j][k]);
+  for (let k = 0; k < n; k++) {
+    host.append(H('div', { class: 'rh', text: CLS[k] }));
+    for (let j = 0; j <= n; j++) {
+      const cnt = M[j][k], diag = j === k;
+      let t, txt = String(cnt), cls = 'c';
+      if (ST.cmErr) {
+        if (diag) { txt = '—'; t = 0; cls += ' z'; } else t = cnt / maxOff;
+      } else t = cnt / NI[k];
+      if (!cnt && !diag) { cls += ' z'; txt = '0'; }
+      if (t > 0.5) cls += ' hi';
+      const cell = H('div', { class: cls, style: '--t:' + Math.min(1, t).toFixed(3), role: 'cell', text: txt });
+      const to = j === n ? 'missed' : CLS[j];
+      attachTip(cell, () => ({ title: 'True ' + CLS[k], rows: [{ name: j === n ? 'Not detected' : 'Detected as ' + to, value: num(cnt) }, { name: 'Share of true ' + CLS[k], value: pct1(cnt / NI[k]) }] }));
+      host.append(cell);
+    }
+  }
+}
+
+/* ---------- TRAINING ---------- */
+function renderTraining() {
+  const h = D[ST.model], ep = h.epoch, N = ep.length;
+  const label = ST.model === 'v2' ? 'New model: 6 classes, 60 epochs, dataset_v2 validation split' : 'Original model: 2 classes (state, arrow), 50 epochs, original validation split';
+  const d = ST.tz ? [0.9, 1] : [0, 1];
+  const t = ST.tz ? [0.9, 0.92, 0.94, 0.96, 0.98, 1] : [0, 0.2, 0.4, 0.6, 0.8, 1];
+  const xt = niceTicks(1, N, 6);
+  lineChart($('#trMetrics'), { label: 'Validation metrics per epoch', series: [
+    { name: 'Precision', color: '--s1', x: ep, y: h.p }, { name: 'Recall', color: '--s2', x: ep, y: h.r },
+    { name: 'mAP@50', color: '--s3', x: ep, y: h.m50 }, { name: 'mAP@50-95', color: '--s4', x: ep, y: h.m5095 }],
+    xd: [1, N], yd: d, xticks: xt, yticks: t, xlabel: 'Epoch', ylabel: 'Score', xname: 'Epoch', fmtX: String, height: 320 });
+  $('#trSrc1').textContent = 'Source: runs/detect/' + (ST.model === 'v2' ? 'v2' : 'train') + '/results.csv. ' + label + '.';
+  const tr = h[ST.loss], va = h['v' + ST.loss];
+  const hi = Math.max.apply(null, tr.concat(va));
+  const yt = niceTicks(0, hi, 5);
+  lineChart($('#trLoss'), { label: 'Training and validation loss per epoch', series: [
+    { name: 'Training', color: '--s1', x: ep, y: tr }, { name: 'Validation', color: '--s2', x: ep, y: va }],
+    xd: [1, N], yd: [0, yt[yt.length - 1]], xticks: xt, yticks: yt, xlabel: 'Epoch', ylabel: 'Loss', xname: 'Epoch', fmtX: String, height: 266 });
+  $('#trSrc2').textContent = 'Source: runs/detect/' + (ST.model === 'v2' ? 'v2' : 'train') + '/results.csv.';
+  const best = h.m5095.indexOf(Math.max.apply(null, h.m5095));
+  const rows = [
+    ['First epoch', '1', f3(h.p[0]), f3(h.r[0]), f3(h.m50[0]), f3(h.m5095[0])],
+    ['Best mAP@50-95 epoch', String(ep[best]), f3(h.p[best]), f3(h.r[best]), f3(h.m50[best]), f3(h.m5095[best])],
+    ['Final epoch', String(ep[N - 1]), f3(h.p[N - 1]), f3(h.r[N - 1]), f3(h.m50[N - 1]), f3(h.m5095[N - 1])]
+  ];
+  $('#trTable').replaceChildren(table(['Point in training', 'Epoch', 'Precision', 'Recall', 'mAP@50', 'mAP@50-95'], rows));
+  const gap = (va[N - 1] - tr[N - 1]);
+  const start = ST.model === 'v1'
+    ? 'Epoch 1 starts at precision ' + f3(h.p[0]) + ' with recall ' + f3(h.r[0]) + ': an untrained classifier fires on nearly everything. Epoch 2 swings to ' + f3(h.p[1]) + ' and ' + f3(h.r[1]) + ' before it settles.'
+    : 'Epoch 1 already starts at precision ' + f3(h.p[0]) + ' and recall ' + f3(h.r[0]) + ' because training begins from pretrained weights, and is above 0.95 by epoch 3.';
+  $('#trNote').textContent = 'Final ' + ST.loss + ' loss: training ' + f3(tr[N - 1]) + ', validation ' + f3(va[N - 1]) + ' (gap ' + (gap >= 0 ? '+' : '') + f3(gap) + '). A small gap in either direction means the model is not memorising the training set. ' + start;
+}
+
+/* ---------- PIPELINE ---------- */
+const PNAME = { A: 'A original', B: 'B new linking', C: 'C new linking and detector' };
+const PCOL = { A: '--pa', B: '--pb', C: '--s1' };
+function counts(k) { const c = D.eval[k].counts; return { gt: c.transitions_gt, pred: c.transitions_pred, tp: c.transitions_tp, und: c.transitions_undirected_tp }; }
+function renderPipeline() {
+  const det = { A: D.v1.m50[D.v1.m50.length - 1], B: D.v1.m50[D.v1.m50.length - 1], C: D.det.overall.map50 };
+  barRows($('#dvg'), ['A', 'B', 'C'].map(k => ({
+    label: PNAME[k],
+    bars: [
+      { name: 'Detector mAP@50', color: '--s1', value: det[k], text: f3(det[k]) },
+      { name: 'Transition F1', color: '--s2', value: D.eval[k].transitions.f1, text: f3(D.eval[k].transitions.f1) }
+    ]
+  })));
+
+  const sk = $('#stackKeys'); sk.textContent = '';
+  const third = ST.stack === 'recall' ? 'Missed or linked wrongly' : 'Spurious';
+  [['Correct', '--s1'], ['Right states, reversed direction', '--s2'], [third, '--s3']].forEach(a => sk.append(H('span', {}, H('i', { class: 'sq', style: '--c:var(' + a[1] + ')' }), a[0])));
+  const st = $('#stack'); st.textContent = '';
+  const rec = ST.stack === 'recall';
+  const maxTot = Math.max.apply(null, ['A', 'B', 'C'].map(k => rec ? counts(k).gt : counts(k).pred));
+  ['A', 'B', 'C'].forEach(k => {
+    const c = counts(k), tot = rec ? c.gt : c.pred;
+    const parts = [c.tp, c.und - c.tp, tot - c.und];
+    const names = ['Correct', 'Reversed direction', rec ? 'Missed or linked wrongly' : 'Spurious'];
+    const colors = ['--s1', '--s2', '--s3'];
+    const track = H('div', { class: 'tr2', style: 'width:' + (tot / maxTot * 100) + '%' });
+    parts.forEach((p, i) => {
+      if (p <= 0) return;
+      const s = H('span', { style: '--c:var(' + colors[i] + ');flex:' + p + ' 1 0' });
+      attachTip(s, () => ({ title: PNAME[k], rows: [{ color: 'var(' + colors[i] + ')', name: names[i], value: num(p) }, { name: 'Share of ' + num(tot), value: pct1(p / tot) }] }));
+      track.append(s);
+    });
+    const cap = rec
+      ? num(c.gt) + ' true transitions: ' + num(parts[0]) + ' correct, ' + num(parts[1]) + ' reversed, ' + num(parts[2]) + ' missed or linked wrongly'
+      : num(c.pred) + ' predicted transitions: ' + num(parts[0]) + ' correct, ' + num(parts[1]) + ' reversed, ' + num(parts[2]) + ' spurious';
+    st.append(H('div', { class: 'srow' }, H('div', { class: 'nm', text: k }), track, H('div', { class: 'cap', text: cap })));
+  });
+
+  const c = counts(ST.calc), P = c.tp / c.pred, R = c.tp / c.gt, F = 2 * P * R / (P + R);
+  const calc = $('#calc'); calc.textContent = '';
+  const eq = (k, code, r) => calc.append(H('div', { class: 'eq' }, H('span', { class: 'k', text: k }), H('code', { text: code }), H('span', { class: 'r', text: r })));
+  eq('Counts', 'TP ' + num(c.tp) + '   predicted ' + num(c.pred) + '   true ' + num(c.gt), 'FP ' + num(c.pred - c.tp) + ', FN ' + num(c.gt - c.tp));
+  eq('Precision', 'TP / predicted = ' + num(c.tp) + ' / ' + num(c.pred), f3(P));
+  eq('Recall', 'TP / true = ' + num(c.tp) + ' / ' + num(c.gt), f3(R));
+  eq('F1', '2 x P x R / (P + R)', f3(F));
+  const reported = D.eval[ST.calc].transitions;
+  calc.append(H('div', { class: 'eq' }, H('span', { class: 'k', text: 'Check against the evaluation file' }), H('code', { text: 'precision ' + f3(reported.precision) + ', recall ' + f3(reported.recall) + ', F1 ' + f3(reported.f1) }), H('span', { class: 'r', text: Math.abs(reported.f1 - F) < 0.0006 ? 'Matches' : 'Differs' })));
+
+  const E = D.eval;
+  const defs = [
+    ['State F1', e => e.states.f1], ['Transition precision', e => e.transitions.precision], ['Transition recall', e => e.transitions.recall],
+    ['Transition F1, directed', e => e.transitions.f1], ['Transition F1, direction ignored', e => e.transitions_undirected.f1],
+    ['Endpoint accuracy', e => e.endpoint_accuracy], ['Initial-state accuracy', e => e.initial_state_accuracy],
+    ['Final-state F1', e => e.final_states.f1], ['State name read exactly', e => e.state_ocr_exact],
+    ['State name error rate (CER, lower is better)', e => e.state_ocr_cer], ['Label read exactly', e => e.label_ocr_exact],
+    ['Label error rate (CER, lower is better)', e => e.label_ocr_cer], ['Event exact', e => e.event_exact],
+    ['Whole graph exact, structure only', e => e.graph_exact_structure], ['Whole graph exact, with all text', e => e.graph_exact_full],
+    ['Generated code passes its tests', e => e.code_conformance]
+  ];
+  const t = H('table', { class: 't' });
+  t.append(H('thead', {}, H('tr', {}, ['Metric', 'A', 'B', 'C'].map(x => H('th', { text: x })))));
+  const tb = H('tbody');
+  defs.forEach(d => {
+    const tr = H('tr', {}, H('td', { text: d[0] }));
+    ['A', 'B', 'C'].forEach(k => {
+      const v = d[1](E[k]);
+      const cell = H('td', { style: 'min-width:120px' }, H('div', { style: 'font-family:var(--mono);font-size:13px', text: v == null ? 'n/a' : f3(v) }),
+        H('div', { style: 'height:6px;margin-top:3px;display:flex;justify-content:flex-end' }, H('span', { style: 'display:block;height:6px;border-radius:3px 0 0 3px;background:var(' + PCOL[k] + ');width:' + (v == null ? 0 : Math.min(100, v * 100)) + '%' })));
+      tr.append(cell);
+    });
+    tb.append(tr);
+  });
+  t.append(tb); $('#metTable').replaceChildren(t);
+}
+
+/* ---------- DISCUSS ---------- */
+const QA = [
+  ['What do precision, recall and F1 mean for this detector?', [
+    ['p', 'Precision is the share of detections that are real objects: <code>TP / (TP + FP)</code>. Recall is the share of real objects that were found: <code>TP / (TP + FN)</code>. F1 is their harmonic mean, <code>2PR / (P + R)</code>, which is low if either one is low.'],
+    ['p', 'On the test split the detector reaches precision 0.994 and recall 0.987 at the best-F1 threshold. The weakest class for recall is arrowhead at 0.968.'],
+    ['try', 'Try it: on the Precision and recall card, raise the threshold to 0.90 and watch recall fall faster than precision rises.']]],
+  ['Why is there a confidence threshold, and why 0.40?', [
+    ['p', 'Each detection carries a confidence score. The threshold decides which ones count. Lower thresholds find more objects and admit more false ones. Higher thresholds do the opposite. The curves on the Precision and recall card show this trade-off for every class.'],
+    ['p', 'The pipeline uses 0.40. The Best F1 button finds the threshold that maximises the mean F1 across classes, which is 0.63 (F1 0.991) against 0.989 at 0.40. F1 stays between 0.985 and 0.991 from 0.20 to 0.70 and drops sharply between 0.80 and 0.90, so the exact choice matters little on this data.'],
+    ['p', 'What a miss costs differs by class. A missed arrowhead makes the arrow direction uncertain, and the system flags that for review instead of guessing. A spurious extra arrow is filtered later by the overlap check in the stroke tracer.']]],
+  ['What is the difference between mAP@50 and mAP@50-95?', [
+    ['p', 'A detection counts as correct when its box overlaps the label by at least a given intersection over union, <code>IoU = overlap area / union area</code>. mAP@50 uses 0.50. mAP@50-95 averages ten thresholds from 0.50 to 0.95, so it rewards precise box placement.'],
+    ['p', 'States and final states score 0.995 on both, because they are large and clean. Arrowheads drop from 0.982 to 0.832, because they are only a few pixels across, so a two-pixel shift already lowers the overlap a lot. Reading from the threshold side: the detector finds the arrowheads, but cannot place their boxes to the pixel.']]],
+  ['Why does a 0.99 detector give a 0.32 graph in the original pipeline?', [
+    ['p', 'A box says where an arrow is, not where it starts, ends, or which way it points. The original pipeline linked each arrow end to the nearest state centre. That created fake self-loops, reversed arrows and wrong links when edges cross.'],
+    ['p', 'Pipelines A and B share the same detector. Only the linking changed, and transition F1 rose from 0.320 to 0.585. Retraining the detector with arrowhead, initial-marker, final-state and label classes then raised it to 0.928.'],
+    ['p', 'The lesson for evaluation: a component metric such as mAP can look saturated while the task metric still has most of its headroom. Measure the task.'],
+    ['try', 'Try it: the Detector accuracy is not graph accuracy card.']]],
+  ['How do precision and recall differ at graph level?', [
+    ['p', 'Pipeline A predicted 1,660 transitions for 1,268 real ones, so it over-predicted: precision 0.282, recall 0.370. Pipeline B was cautious and predicted 920: precision 0.696, recall 0.505. Pipeline C predicted 1,212 and got 1,151 right: precision 0.950, recall 0.908.'],
+    ['p', 'The stacked bars on the Where the transitions went card show the same story as counts. In C, 36 transitions had the right pair of states but the wrong direction, 81 were missed or linked to the wrong states, and 25 were spurious.']]],
+  ['Why report the test split and not the validation split?', [
+    ['p', 'The validation split was used during training to decide when to stop and to tune the tracer thresholds (head ratio, direction margin, endpoint tolerance and others). Numbers measured on data that influenced those choices are optimistic. The 360 test diagrams were never used for either.'],
+    ['p', 'The training card shows validation metrics per epoch. Those are for monitoring. The headline results come from the test split.']]],
+  ['What do the training curves tell us?', [
+    ['p', 'For the new model, validation loss stays close to training loss and mAP climbs to a plateau, so there is no sign of overfitting. All 60 epochs ran, since the early-stopping patience of 15 epochs never triggered.'],
+    ['p', 'The original two-class model starts at precision 0.024 with recall 0.984 in epoch 1: an untrained classifier labels almost everything as an object. It swings (0.663 and 0.377 in epoch 2) before settling. The new model starts from a better place, at 0.901 and 0.927, and is above 0.95 by epoch 3.'],
+    ['p', 'The original model ran on a different machine, so its training times are not comparable to the new model\'s.'],
+    ['try', 'Try it: on the training card switch the model and the metric range.']]],
+  ['What does the confusion matrix show?', [
+    ['p', 'It is nearly diagonal. The few errors make sense for line drawings: 14 initial markers were called arrows (both are short arrows), 9 arrows were called arrowheads, and 17 arrowheads and 4 arrows were missed.'],
+    ['try', 'Try it: on the confusion matrix card choose Errors only to rescale the colours to the off-diagonal counts.']]],
+  ['Why is whole-graph accuracy with text only 0.269?', [
+    ['p', 'That metric needs every state name, label, event and guard to be exact, on every transition of the diagram. A single wrong character fails the diagram. Structure alone, ignoring text, is right for 0.719 of diagrams.'],
+    ['p', 'Text reading is the weakest stage. State names have a character error rate of 0.052. Transition labels are 0.228, because they are small, sit on or next to lines, and contain symbols such as brackets and slashes. That is why the editor flags uncertain text and lets a person correct it.']]],
+  ['How were detections matched to ground truth at graph level?', [
+    ['p', 'Predicted states are paired with true states by box IoU of at least 0.5, using the Hungarian algorithm for the best one-to-one pairing. IDs are not used, because they only record detection order. Transitions are then compared through that pairing, and metrics are summed over all 360 diagrams before dividing (micro-averaged).']]],
+  ['What can these numbers not tell us?', [
+    ['p', 'Training and test images come from the same synthetic generator. The test split measures generalisation to new random diagrams, not to a new kind of image. Photos, hand drawing and unusual styles are not measured here, and the OCR stage is the one expected to degrade most.'],
+    ['p', 'The correction loop in the editor is designed to collect real examples. No real corrections have been trained on yet, so no improvement from it is claimed.']]]
+];
+function renderDiscuss() {
+  const host = $('#qa'); if (host.childElementCount) return;
+  QA.forEach(q => {
+    const body = H('div', { class: 'body' });
+    q[1].filter(b => b[0] !== 'try').forEach(b => { const p = H('p'); p.innerHTML = b[1]; body.append(p); });
+    host.append(H('details', {}, H('summary', { text: q[0] }), body));
+  });
+}
+
+/* ---------- wiring ---------- */
+function renderAll() {
+  renderSummary(); renderDetector(); renderClasses(); renderTraining(); renderPipeline(); renderDiscuss();
+}
+function seg(sel, attr, fn) {
+  $$(sel + ' button').forEach(b => b.addEventListener('click', () => {
+    $$(sel + ' button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    fn(b.dataset[attr]);
+  }));
+}
+$('#conf').addEventListener('input', e => { ST.conf = +e.target.value; renderDetector(); });
+$('#btnDefault').addEventListener('click', () => { ST.conf = 0.40; renderDetector(); });
+$('#btnBest').addEventListener('click', () => {
+  let bi = 0; MEAN.f1.forEach((v, i) => { if (v > MEAN.f1[bi]) bi = i; });
+  ST.conf = Math.min(0.95, Math.max(0.05, +PC.x[bi].toFixed(2))); renderDetector();
+});
+seg('#zoomSeg', 'z', v => { ST.zoom = v === '1'; renderDetector(); });
+seg('#cmSeg', 'e', v => { ST.cmErr = v === '1'; buildCM(); });
+seg('#modelSeg', 'm', v => { ST.model = v; renderTraining(); });
+seg('#tzSeg', 'z', v => { ST.tz = v === '1'; renderTraining(); });
+seg('#lossSeg', 'l', v => { ST.loss = v; renderTraining(); });
+seg('#stackSeg', 'v', v => { ST.stack = v; renderPipeline(); });
+seg('#calcSeg', 'p', v => { ST.calc = v; renderPipeline(); });
+buildChips();
+renderAll();
+
+/* ---------- card navigation ---------- */
+const SLIDES = $$('section.slide');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const navBox = $('#nav');
+const groups = [];
+SLIDES.forEach((s, i) => {
+  const g = s.dataset.group;
+  if (!groups.length || groups[groups.length - 1].name !== g) groups.push({ name: g, first: i });
+  s._g = groups.length - 1;
+  const ey = $('.eyebrow', s); if (ey) ey.textContent = g;
+  const sn = $('.snum', s); if (sn) sn.textContent = (i + 1) + ' / ' + SLIDES.length;
+});
+const links = groups.map(g => {
+  const a = H('a', { href: '#' + SLIDES[g.first].id, text: g.name });
+  a.addEventListener('click', e => { e.preventDefault(); go(g.first); });
+  navBox.append(a); return a;
+});
+let cur = 0;
+function go(i) {
+  i = Math.max(0, Math.min(SLIDES.length - 1, i));
+  if (i === 0) window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  else SLIDES[i].scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+function setCur(i) {
+  cur = i;
+  links.forEach((a, k) => a.setAttribute('aria-current', String(k === SLIDES[i]._g)));
+  $('#count').textContent = 'Card ' + (i + 1) + ' of ' + SLIDES.length;
+  $('#bar').style.width = ((i + 1) / SLIDES.length * 100) + '%';
+  $('#prev').disabled = i === 0; $('#next').disabled = i === SLIDES.length - 1;
+  const a = links[SLIDES[i]._g];
+  navBox.scrollTo({ left: Math.max(0, a.offsetLeft - navBox.clientWidth / 2 + a.clientWidth / 2), behavior: reduce ? 'auto' : 'smooth' });
+  try { history.replaceState(null, '', '#' + SLIDES[i].id); } catch (e) {}
+}
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver(es => {
+    es.forEach(en => { if (en.isIntersecting) setCur(SLIDES.indexOf(en.target)); });
+  }, { rootMargin: '-30% 0px -65% 0px', threshold: 0 });
+  SLIDES.forEach(p => io.observe(p));
+}
+setCur(0);
+$('#prev').addEventListener('click', () => go(cur - 1));
+$('#next').addEventListener('click', () => go(cur + 1));
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target && e.target.tagName;
+  if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || t === 'SUMMARY') return;
+  if (e.key === 'n' || e.key === 'j' || e.key === 'ArrowRight') { go(cur + 1); e.preventDefault(); }
+  else if (e.key === 'p' || e.key === 'k' || e.key === 'ArrowLeft') { go(cur - 1); e.preventDefault(); }
+});
+
+let rz;
+addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderAll, 150); });
+
+try {
+  const h = location.hash.replace('#', '');
+  const i = SLIDES.findIndex(p => p.id === h);
+  if (i > 0) setTimeout(() => SLIDES[i].scrollIntoView({ block: 'start' }), 0);
+} catch (e) {}
+})();
+</script>
+</body></html>
